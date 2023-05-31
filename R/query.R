@@ -92,7 +92,7 @@ get_rows <- function(args, connection_name, sql) {
     },
 
     error = function(err) {
-      message(dbGetException(conn))
+      message(RORacle::dbGetException(conn))
       stop(err)
     },
 
