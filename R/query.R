@@ -27,7 +27,7 @@ open_db_conn <- function(connection_name = "micpr") {
   password <- Sys.getenv(paste(toupper(connection_name), "CREDS", "PSW", sep = "_"))
   dbname <- Sys.getenv(paste(toupper(connection_name), "DB", "NAME", sep = "_"))
 
-  RORacle::dbConnect(drv = RORacle::dbDriver("Oracle"),
+  ROracle::dbConnect(drv = ROracle::dbDriver("Oracle"),
     username = username, password = password, dbname = dbname
   )
 }
@@ -92,7 +92,7 @@ get_rows <- function(args, connection_name, sql) {
     },
 
     error = function(err) {
-      message(RORacle::dbGetException(conn))
+      message(ROracle::dbGetException(conn))
       stop(err)
     },
 
