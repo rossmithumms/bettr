@@ -5,8 +5,10 @@ get_sql_dir <- function() {
   sql_dir <- Sys.getenv("SQL_DIR")
   
   if (is.na(sql_dir) | sql_dir == "") {
-    stop("!!! \"sql_dir\" must be defined for functions.R")
+    stop("!!! \"sql_dir\" must be defined for bettr to function")
   }
+
+  sql_dir
 }
 
 # https://www.r-bloggers.com/2019/08/no-visible-binding-for-global-variable/
