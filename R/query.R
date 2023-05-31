@@ -1,19 +1,6 @@
 # Use this file to write up all your R functions to simplify data access.
 #' @importFrom rlang .data
 
-# library(DBI)
-# library(ROracle)
-# library(here)
-# library(readr)
-# library(stringr)
-# library(dplyr)
-# library(tidyr)
-# library(tibble)
-# library(janitor)
-# library(lubridate)
-# library(purrr)
-# library(data.table)
-
 get_sql_dir <- function() {
   sql_dir <- Sys.getenv("SQL_DIR")
   
