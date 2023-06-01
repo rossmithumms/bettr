@@ -74,19 +74,24 @@ get_rows <- function(args, connection_name, sql) {
 
       args %>%
         dplyr::select(get_bind_colnames(sql)) %>%
-        as.list %>%
-        purrr::list_transpose %>%
+        as.list() %>%
+        purrr::list_transpose() %>%
         purrr::map(~{
-          message("+++ binding...")
+          message(paste0(c("... binding: ", stringr::str_glue("{names(.)} = {paste(.)}; "))))
+          tictoc::tic()
           rs <- ROracle::dbSendQuery(conn, sql, bind_rows(.))
-          message("+++ fetching...")
+          tictoc::toc()
+          message("... fetching")
+          tictoc::tic()
           data <- ROracle::fetch(rs)
+          tictoc::toc()
           ROracle::dbClearResult(rs)
+          message(stringr::str_glue("... returning {count(data)} rows"))
           return(data)
         }) %>%
-          data.table::rbindlist %>%
-          tibble::tibble %>%
-          janitor::clean_names
+          data.table::rbindlist() %>%
+          tibble::tibble() %>%
+          janitor::clean_names()
     },
 
     warning = function(warn) {
