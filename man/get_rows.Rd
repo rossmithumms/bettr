@@ -4,15 +4,17 @@
 \alias{get_rows}
 \title{Get Rows from a Database}
 \usage{
-get_rows(args, connection_name, sql)
+get_rows(binds, connection_name, sql, suppress_bind_logging = FALSE)
 }
 \arguments{
-\item{args}{a data frame, data.table, or tibble.  Query will be called once for each row.}
+\item{binds}{a data frame, data.table, or tibble with bind parameters.  Query will be called once for each row.}
 
 \item{connection_name}{Name of the database connection.  This is used to retrieve the
 environment variables to open the connection and locate the SQL query in the SQL_DIR directory.}
 
 \item{sql}{Name of the SQL file to be used for the query.}
+
+\item{suppress_bind_logging}{Optionally suppress the logging of bind parameters (defaults to false).}
 }
 \value{
 A tibble of the result set with cleaned column names.
