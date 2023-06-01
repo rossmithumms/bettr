@@ -64,29 +64,35 @@ close_db_conn <- function(conn) {
 #' @param connection_name Name of the database connection.  This is used to retrieve the
 #' environment variables to open the connection and locate the SQL query in the SQL_DIR directory.
 #' @param sql Name of the SQL file to be used for the query.
+#' @param suppress_bind_logging Optionally suppress the logging of bind parameters (defaults to false).
 #' @return A tibble of the result set with cleaned column names.
 #' @export
-get_rows <- function(args, connection_name, sql) {
+get_rows <- function(args, connection_name, sql, suppress_bind_logging = FALSE) {
   tryCatch({
       connection_name <- toupper(connection_name)
       conn <- open_db_conn(connection_name = connection_name)
-      sql <- load_sql(sql = sql, connection_name = connection_name)
+      sql_statement <- load_sql(sql = sql, connection_name = connection_name)
 
       args %>%
-        dplyr::select(get_bind_colnames(sql)) %>%
+        dplyr::select(get_bind_colnames(sql_statement)) %>%
         as.list() %>%
         purrr::list_transpose() %>%
         purrr::map(~{
-          message(paste0(c("... binding: ", stringr::str_glue("{names(.)} = {paste(.)}; "))))
+          message(stringr::str_glue("... querying {connection_name}: {sql}"))
+          if(suppress_bind_logging == FALSE) {
+            message(paste0(c("... binding: ", stringr::str_glue("{names(.)} = {paste(.)}; "))))
+          } else {
+            message("... binding: <suppressed>")
+          }
           tictoc::tic()
-          rs <- ROracle::dbSendQuery(conn, sql, bind_rows(.))
+          rs <- ROracle::dbSendQuery(conn, sql_statement, dplyr::bind_rows(.))
           tictoc::toc()
           message("... fetching")
           tictoc::tic()
           data <- ROracle::fetch(rs)
           tictoc::toc()
           ROracle::dbClearResult(rs)
-          message(stringr::str_glue("... returning {count(data)} rows"))
+          message(stringr::str_glue("... returning {dplyr::count(data)} rows"))
           return(data)
         }) %>%
           data.table::rbindlist() %>%
