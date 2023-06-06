@@ -7,14 +7,14 @@
 append_rows(rows, connection_name, table_name)
 }
 \arguments{
-\item{.}{a data frame, data.table, or tibble with rows of values to insert}
+\item{rows}{a data frame, data.table, or tibble with rows of values to insert}
 
-\item{conn}{The ROracle::connection object}
+\item{connection_name}{Name of the database connection.  This is used to retrieve the}
 
-\item{name}{The name of the table}
+\item{table_name}{The name of the table to receive data.}
 }
 \description{
 Take the passed rows and append them to a table given a connection.
-If the table does not exist, it is created with the given name.
-Note that the schema for created tables is expected to be the database username.
+If the table does not exist, it is created with \code{ensure_table()}.
+Note: the schema for created tables is expected to be the database username.
 }

@@ -22,14 +22,26 @@ open_db_conn <- function(connection_name = "micpr") {
   )
 }
 
+#' Get the Database Username
+#' 
+#' @param connection_name the snake_case name of the connection.
+#' @return The database username for that connection as defined in .Renviron
 get_db_username <- function(connection_name) {
   Sys.getenv(paste(toupper(connection_name), "CREDS", "USR", sep = "_"))
 }
 
+#' Get the Database Password
+#' 
+#' @param connection_name the snake_case name of the connection.
+#' @return The database password for that connection as defined in .Renviron
 get_db_password <- function(connection_name) {
   Sys.getenv(paste(toupper(connection_name), "CREDS", "PSW", sep = "_"))
 }
 
+#' Get the Database Connection String or TNS Name
+#' 
+#' @param connection_name the snake_case name of the connection.
+#' @return The database connection String for that connection as defined in .Renviron
 get_db_name <- function(connection_name) {
   Sys.getenv(paste(toupper(connection_name), "DB", "NAME", sep = "_"))
 }
@@ -42,6 +54,7 @@ get_db_name <- function(connection_name) {
 #' @return Response from DBI::dbDisconnect
 close_db_conn <- function(conn) {
   ROracle::dbDisconnect(conn)
+  message("... disconnected")
 }
 
 #' Get Rows from a Database
@@ -61,7 +74,7 @@ close_db_conn <- function(conn) {
 #' audited separately from the R script calling this function.
 #' 
 #' @param binds a data frame, data.table, or tibble with bind parameters.  Query will be called once for each row.
-#' @param connection_name Name of the database connection.  This is used to retrieve the
+#' @param connection_name The snake_case name of the connection. This is used to retrieve the
 #' environment variables to open the connection and locate the SQL query in the SQL_DIR directory.
 #' @param sql Name of the SQL file to be used for the query.
 #' @param suppress_bind_logging Optionally suppress the logging of bind parameters (defaults to false).
@@ -119,26 +132,43 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
 #' Append Rows to a Table
 #' 
 #' Take the passed rows and append them to a table given a connection.
-#' If the table does not exist, it is created with the given name.
-#' Note that the schema for created tables is expected to be the database username.
+#' If the table does not exist, it is created with `ensure_table()`.
+#' Note: the schema for created tables is expected to be the database username.
 #' 
-#' @param . a data frame, data.table, or tibble with rows of values to insert
-#' @param conn The ROracle::connection object
-#' @param name The name of the table
+#' @param rows a data frame, data.table, or tibble with rows of values to insert
+#' @param connection_name Name of the database connection.  This is used to retrieve the
+#' @param table_name The name of the table to receive data.
 #' @export
 append_rows <- function(rows, connection_name, table_name) {
   tryCatch({
       connection_name = toupper(connection_name)
+      schema <- get_db_username(connection_name)
+      table_name <- toupper(table_name)
+
+      # If the table does not exist yet, create it
+      ensure_table(connection_name = connection_name, table_name = table_name)
+
+      # Then write rows into it
       conn <- open_db_conn(connection_name = connection_name)
-      ROracle::dbWriteTable(
+      tictoc::tic()
+      success <- ROracle::dbWriteTable(
         conn = conn,
         name = table_name,
         schema = get_db_username(connection_name),
         row.names = FALSE,
         value = rows %>%
-          janitor::clean_names(),
+          janitor::clean_names() %>%
+          dplyr::rename_with(base::toupper),
         append = TRUE
       )
+
+      if (success == TRUE) {
+        ROracle::dbCommit(conn = conn)
+      }
+      tictoc::toc()
+
+      message(stringr::str_glue("+++ write to table: {success}"))
+      return(success)
     },
 
     warning = function(warn) {
@@ -151,7 +181,168 @@ append_rows <- function(rows, connection_name, table_name) {
     },
 
     finally = {
-      message("+++ closing connection")
+      close_db_conn(conn)
+    }
+  )
+}
+
+#' Ensure a Table Exists for Appending Rows
+#' 
+#' This function ensures a table exists in the named connection for appending rows.
+#' Note that this function depends on a SQL file named `create_table_<table_name>.sql`
+#' in the connection-specific directory.
+#' 
+#' @param connection_name The snake_case name of the connection.
+#' @param table_name The snake_case name of the table to ensure exists in the database.
+#' @return Nothing
+#' @export
+ensure_table <- function(connection_name, table_name) {
+  tryCatch({
+      connection_name <- toupper(connection_name)
+      conn <- open_db_conn(connection_name = connection_name)
+      table_name <- toupper(table_name)
+
+      # If the table does not exist yet, create it
+      table_exists <- exists_table(
+        connection_name = connection_name,
+        table_name = table_name
+      )
+
+      message(stringr::str_glue("... table exists: {table_exists}"))
+
+      if (table_exists == FALSE) {
+        result <- ROracle::dbSendQuery(  # execute(
+          conn = conn,
+          statement = load_sql(
+            tolower(stringr::str_glue("create_table_{table_name}")),
+            connection_name = connection_name
+          )
+        )
+
+        success <- ROracle::dbGetInfo(result)$completed
+        if (success) {
+          ROracle::dbCommit(conn = conn)
+        }
+        message(stringr::str_glue("+++ created table {table_name}, result: {success}"))
+      } else {
+        message(stringr::str_glue("+++ table already exists: {table_name}"))
+      }
+
+      TRUE
+    },
+
+    warning = function(warn) {
+      warning(warn)
+    },
+
+    error = function(err) {
+      message(ROracle::dbGetException(conn))
+      stop(err)
+    },
+
+    finally = {
+      close_db_conn(conn)
+    }
+  )
+}
+
+#' Check if a Table Exists
+#' 
+#' Implementing this function here because ROracle::dbExistsTable is being weird.
+#' 
+#' @param connection_name The snake_case name of the connection.
+#' @param table_name The snake_case name of the table to drop.
+#' @export
+exists_table <- function(connection_name, table_name) {
+  tryCatch({
+      connection_name <- toupper(connection_name)
+      conn <- open_db_conn(connection_name = connection_name)
+      table_name <- toupper(table_name)
+      bad_characters <- stringr::str_detect(table_name, "[^_A-Za-z0-9]")
+
+      if (bad_characters == TRUE) {
+        stop("!!! Invalid characters detected in table name; stopping")
+      }
+
+      # If the table does not exist yet, create it
+      rs <- ROracle::dbSendQuery(  # execute(
+        conn = conn,
+        statement = stringr::str_glue(
+          "SELECT TABLE_NAME FROM USER_TABLES WHERE UPPER(TABLE_NAME) = &table_name"
+        ),
+        data.frame(table_name = table_name)
+      )
+      result <- ROracle::fetch(rs)
+      ROracle::dbClearResult(rs)
+      0 < dplyr::count(result)
+    },
+
+    warning = function(warn) {
+      warning(warn)
+    },
+
+    error = function(err) {
+      message(ROracle::dbGetException(conn))
+      stop(err)
+    },
+
+    finally = {
+      close_db_conn(conn)
+    }
+  )
+}
+
+#' Drop a Table
+#' 
+#' Drops a table from the database.
+#' Note that this function depends on a SQL file named `drop_table_<table_name>.sql`
+#' in the connection-specific directory.
+#' 
+#' @param connection_name The snake_case name of the connection.
+#' @param table_name The snake_case name of the table to drop.
+#' @export
+drop_table <- function(connection_name, table_name) {
+  tryCatch({
+      connection_name <- toupper(connection_name)
+      conn <- open_db_conn(connection_name = connection_name)
+      schema <- get_db_username(connection_name)
+
+      # If the table does not exist yet, create it
+      table_exists <- exists_table(
+        connection_name = connection_name,
+        table_name = table_name
+      )
+
+      if (table_exists == TRUE) {
+        result <- ROracle::dbSendQuery(
+          conn = conn,
+          statement = load_sql(
+            tolower(stringr::str_glue("drop_table_{table_name}")),
+            connection_name = connection_name
+          )
+        )
+        success <- ROracle::dbGetInfo(result)$completed
+        if (success) {
+          ROracle::dbCommit(conn = conn)
+        }
+        message(stringr::str_glue("+++ drop table {table_name}, result: {success}"))
+        return(success)
+      } else {
+        message(stringr::str_glue("+++ table does not exist: {table_name}"))
+        return(FALSE)
+      }
+    },
+
+    warning = function(warn) {
+      warning(warn)
+    },
+
+    error = function(err) {
+      message(ROracle::dbGetException(conn))
+      stop(err)
+    },
+
+    finally = {
       close_db_conn(conn)
     }
   )
@@ -184,6 +375,12 @@ get_url_query <- function(url_query = "") {
   })
 }
 
+#' Get the Directory where SQL Queries are Stored
+#' 
+#' All the functions in this module require that SQL statements are stored in external files.
+#' This function refers to the environment variable SQL_DIR and retrieves it for use.
+#' 
+#' @return The path to the directory where SQL queries are stored.
 get_sql_dir <- function() {
   sql_dir <- Sys.getenv("SQL_DIR")
   
@@ -194,23 +391,42 @@ get_sql_dir <- function() {
   sql_dir
 }
 
+#' Load a SQL Statement from an External File
+#' 
+#' All the functions in this module require that SQL statements are stored in external files.
+#' This function loads a SQL statement from a file.
+#' 
+#' @param sql The snake_case name of the SQL file without the file extension (such as `get_test_data`).
+#' @param connection_name The snake_case name of the database connection.
+#' @return The SQL statement stored in the file.
+#' 
 load_sql <- function(sql, connection_name = NA) {
-  if (!is.na(stringr::str_match(sql, "[-_a-zA-Z0-9]+"))) {
-    sql_path <- here::here(
-      get_sql_dir(), toupper(connection_name), paste(sql,  "sql", sep = ".")
-    ) #nolint
+  if (!is.na(stringr::str_match(sql, "[^-_a-zA-Z0-9]"))) {
+    stop("!!! SQL file name contains illegal characters; stopping")
+  }
 
-    if (file.exists(sql_path)) {
-      readr::read_file(file = sql_path)
-    } else {
-      stop(stringr::str_glue("!!! SQL file not found: {sql_path}"))
-    }
+  sql_path <- here::here(
+    get_sql_dir(), toupper(connection_name), paste(sql,  "sql", sep = ".")
+  ) #nolint
+
+  if (file.exists(sql_path)) {
+    readr::read_file(file = sql_path)
+  } else {
+    stop(stringr::str_glue("!!! SQL file not found: {sql_path}"))
   }
 }
 
+#' Get the Names of Column Binds in a SQL Statement
+#' 
+#' The query parameters to retrieve data from a database are handled in RORacle as bind parameters.
+#' This function scans a SQL statement for ampersand-prefixed, snake_cased bind parameters.
+#' 
+#' @param sql The SQL statement to scan for bind parameters.
+#' @return A character vector of snake_cased bind parameter names to be used in dplyr verbs.
 get_bind_colnames <- function(sql) {
   sql %>%
     stringr::str_match_all("&([a-z0-9_]+)") %>%
     data.frame %>%
-    dplyr::pull(.data$X2)
+    dplyr::pull(.data$X2) %>%
+    toupper
 }

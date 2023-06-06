@@ -9,7 +9,7 @@ get_rows(binds, connection_name, sql, suppress_bind_logging = FALSE)
 \arguments{
 \item{binds}{a data frame, data.table, or tibble with bind parameters.  Query will be called once for each row.}
 
-\item{connection_name}{Name of the database connection.  This is used to retrieve the
+\item{connection_name}{The snake_case name of the connection. This is used to retrieve the
 environment variables to open the connection and locate the SQL query in the SQL_DIR directory.}
 
 \item{sql}{Name of the SQL file to be used for the query.}
