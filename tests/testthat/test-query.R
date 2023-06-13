@@ -41,10 +41,9 @@ test_that("we can create a table, append data to it, pull data from it, and drop
         )
       ),
       connection_name = "app_dqhi_dev",
-      table_name = "bettr_test_data"
+      table_name = "bettr_test_data",
+      suppress_bind_logging = TRUE
     )
-
-    expect_equal(TRUE, result)
 
     message("----- we can pull data from it")
     actual <- tibble::tibble(
@@ -64,12 +63,12 @@ test_that("we can create a table, append data to it, pull data from it, and drop
       expected %>% dplyr::pull()
     )
 
-    # message("----- we can delete it")
-    # result <- bettr::drop_table(
-    #   connection_name = "app_dqhi_dev",
-    #   table_name = "bettr_test_data"
-    # )
+    message("----- we can delete it")
+    result <- bettr::drop_table(
+      connection_name = "app_dqhi_dev",
+      table_name = "bettr_test_data"
+    )
 
-    # expect_equal(TRUE, result)
+    expect_equal(TRUE, result)
   }
 )

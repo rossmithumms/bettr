@@ -87,13 +87,17 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
       sql_statement <- load_sql(sql = sql, connection_name = connection_name)
 
       binds %>%
+        dplyr::rename_with(toupper) %>%
         dplyr::select(get_bind_colnames(sql_statement)) %>%
         as.list() %>%
         purrr::list_transpose() %>%
         purrr::map(~{
           message(stringr::str_glue("... querying {connection_name}: {sql}"))
-          if(suppress_bind_logging == FALSE) {
-            message(paste0(c("... binding: ", stringr::str_glue("{names(.)} = {paste(.)}; "))))
+          if (suppress_bind_logging == FALSE) {
+            message(paste0(c(
+                "... binding: ",
+                stringr::str_glue("{names(.)} = {paste(.)}; ")
+            )))
           } else {
             message("... binding: <suppressed>")
           }
@@ -139,36 +143,61 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
 #' @param connection_name Name of the database connection.  This is used to retrieve the
 #' @param table_name The name of the table to receive data.
 #' @export
-append_rows <- function(rows, connection_name, table_name) {
+append_rows <- function(rows, connection_name, table_name, suppress_bind_logging = FALSE) {
   tryCatch({
-      connection_name = toupper(connection_name)
+      connection_name <- toupper(connection_name)
       schema <- get_db_username(connection_name)
       table_name <- toupper(table_name)
 
       # If the table does not exist yet, create it
       ensure_table(connection_name = connection_name, table_name = table_name)
 
+      message("!!! DEBUG")
+
       # Then write rows into it
       conn <- open_db_conn(connection_name = connection_name)
-      tictoc::tic()
-      success <- ROracle::dbWriteTable(
-        conn = conn,
-        name = table_name,
-        schema = get_db_username(connection_name),
-        row.names = FALSE,
-        value = rows %>%
-          janitor::clean_names() %>%
-          dplyr::rename_with(base::toupper),
-        append = TRUE
+      sql_statement <- paste0(
+        "INSERT INTO ",
+        get_db_username(connection_name), ".",
+        table_name, " (",
+        paste(
+          rows %>%
+            names() %>%
+            toupper(),
+          collapse = ", "
+        ),
+        ") VALUES (&",
+        paste(
+          rows %>%
+            names() %>%
+            toupper(),
+          collapse = ", &"
+        ),
+        ")"
       )
+      # TODO filter rows down to columns in table
 
-      if (success == TRUE) {
-        ROracle::dbCommit(conn = conn)
-      }
-      tictoc::toc()
-
-      message(stringr::str_glue("+++ write to table: {success}"))
-      return(success)
+      # TODO write rows one at a time to database
+      rows %>%
+        dplyr::rename_with(toupper) %>%
+        as.list() %>%
+        purrr::list_transpose() %>%
+        purrr::walk(~{
+          message(stringr::str_glue("... querying {connection_name}: {sql_statement}"))
+          if (suppress_bind_logging == FALSE) {
+            message(paste0(c("... binding: ", stringr::str_glue("{names(.)} = {paste(.)}; "))))
+          } else {
+            message("... binding: <suppressed>")
+          }
+          tictoc::tic()
+          result <- ROracle::dbSendQuery(conn, sql_statement, dplyr::bind_rows(.))
+          success <- ROracle::dbGetInfo(result)$completed
+          message(stringr::str_glue("... success: {success}"))
+          if (success == TRUE) {
+            ROracle::dbCommit(conn = conn)
+          }
+          tictoc::toc()
+        })
     },
 
     warning = function(warn) {
@@ -425,7 +454,7 @@ load_sql <- function(sql, connection_name = NA) {
 #' @return A character vector of snake_cased bind parameter names to be used in dplyr verbs.
 get_bind_colnames <- function(sql) {
   sql %>%
-    stringr::str_match_all("&([a-z0-9_]+)") %>%
+    stringr::str_match_all("&([a-zA-Z0-9_]+)") %>%
     data.frame %>%
     dplyr::pull(.data$X2) %>%
     toupper
