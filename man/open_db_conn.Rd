@@ -7,7 +7,7 @@
 open_db_conn(connection_name = "micpr")
 }
 \arguments{
-\item{connection_name}{Database connection name; prefix to environment variables.}
+\item{connection_name}{Database connection name; prefix to env vars.}
 }
 \value{
 A DBI connection object
@@ -17,5 +17,6 @@ This function opens a database connection.
 It depends on environment variables following this convention:
 <CONNECTION_NAME>_CREDS_USR: database user name
 <CONNECTION_NAME>_CREDS_PSW: database user password
-<CONNECTION_NAME>_DB_NAME: database connection string (tnsnames.ora name OR Oracle connection string)
+<CONNECTION_NAME>_DB_NAME: database connection string
+(tnsnames.ora name OR Oracle connection string)
 }

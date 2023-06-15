@@ -4,14 +4,16 @@
 \alias{append_rows}
 \title{Append Rows to a Table}
 \usage{
-append_rows(rows, connection_name, table_name)
+append_rows(rows, connection_name, table_name, suppress_bind_logging = FALSE)
 }
 \arguments{
 \item{rows}{a data frame, data.table, or tibble with rows of values to insert}
 
-\item{connection_name}{Name of the database connection.  This is used to retrieve the}
+\item{connection_name}{The snake_case name of the connection.}
 
 \item{table_name}{The name of the table to receive data.}
+
+\item{suppress_bind_logging}{Optionally suppress the logging of bind parameters (defaults to false).}
 }
 \description{
 Take the passed rows and append them to a table given a connection.

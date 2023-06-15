@@ -10,7 +10,7 @@ get_db_name(connection_name)
 \item{connection_name}{the snake_case name of the connection.}
 }
 \value{
-The database connection String for that connection as defined in .Renviron
+The database connection String as defined in .Renviron
 }
 \description{
 Get the Database Connection String or TNS Name
