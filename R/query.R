@@ -201,6 +201,7 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
           if (success == TRUE) {
             ROracle::dbCommit(conn = conn)
           }
+          ROracle::dbClearResult(result)
           tictoc::toc()
         })
     },
