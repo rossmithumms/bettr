@@ -258,6 +258,7 @@ ensure_table <- function(connection_name, table_name) {
         if (success) {
           ROracle::dbCommit(conn = conn)
         }
+        ROracle::dbClearResult(result)
         message(stringr::str_glue("+++ created table {table_name}, result: {success}"))
       } else {
         message(stringr::str_glue("+++ table already exists: {table_name}"))
@@ -360,6 +361,7 @@ drop_table <- function(connection_name, table_name) {
         if (success) {
           ROracle::dbCommit(conn = conn)
         }
+        ROracle::dbClearResult(result)
         message(stringr::str_glue("+++ drop table {table_name}, result: {success}"))
         return(success)
       } else {
