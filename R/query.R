@@ -194,8 +194,10 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
           } else {
             message("... binding: <suppressed>")
           }
+          message("!!! DEBUG: about to call dbSendQuery")
           tictoc::tic()
           result <- ROracle::dbSendQuery(conn, sql_statement, dplyr::bind_rows(.))
+          message("!!! DEBUG: DONE")
           success <- ROracle::dbGetInfo(result)$completed
           message(stringr::str_glue("... success: {success}"))
           if (success == TRUE) {
