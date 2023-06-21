@@ -188,8 +188,8 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
         as.list() %>%
         purrr::list_transpose() %>%
         purrr::walk(~{
-          message(stringr::str_glue("... querying {connection_name}: {sql_statement}"))
           if (suppress_bind_logging == FALSE) {
+            message(stringr::str_glue("... querying {connection_name}: {sql_statement}"))
             message(paste0(c("... binding: ", stringr::str_glue("{names(.)} = {paste(.)}; "))))
           } else {
             message("... binding: <suppressed>")
