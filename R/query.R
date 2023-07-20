@@ -92,7 +92,7 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
       conn <- open_db_conn(connection_name = connection_name)
       sql_statement <- load_sql(sql = sql, connection_name = connection_name)
 
-      binds %>%
+      output <- binds %>%
         dplyr::rename_with(toupper) %>%
         dplyr::select(get_bind_colnames(sql_statement)) %>%
         as.list() %>%
@@ -121,6 +121,8 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
           data.table::rbindlist() %>%
           tibble::tibble() %>%
           janitor::clean_names()
+
+      return(output)
     },
 
     warning = function(warn) {
