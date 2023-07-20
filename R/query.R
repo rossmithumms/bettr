@@ -124,7 +124,7 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
 
       message(".... THIS should actually result in a 16,500-ish number:")
       message(dplyr::count(output))
-      return(output)
+      output
     },
 
     warning = function(warn) {
@@ -367,10 +367,10 @@ drop_table <- function(connection_name, table_name) {
         }
         ROracle::dbClearResult(result)
         message(stringr::str_glue("+++ drop table {table_name}, result: {success}"))
-        return(success)
+        success
       } else {
         message(stringr::str_glue("+++ table does not exist: {table_name}"))
-        return(FALSE)
+        FALSE
       }
     },
 
