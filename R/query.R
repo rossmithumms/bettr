@@ -92,7 +92,7 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
       conn <- open_db_conn(connection_name = connection_name)
       sql_statement <- load_sql(sql = sql, connection_name = connection_name)
 
-      output <- binds %>%
+      binds %>%
         dplyr::rename_with(toupper) %>%
         dplyr::select(get_bind_colnames(sql_statement)) %>%
         as.list() %>%
@@ -117,18 +117,9 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
           ROracle::dbClearResult(rs)
           message(stringr::str_glue("... returning {dplyr::count(data)} rows"))
           data
-        })
-
-      message("!!! Hey!  I exist!")
-
-      output <- output %>%
+        }) %>%
           data.table::rbindlist() %>%
           tibble::as_tibble(.name_repair = snakecase::to_snake_case)
-
-      message(".... THIS should actually result in a 16,500-ish number:")
-      message(dplyr::count(output))
-
-      output
     },
 
     warning = function(warn) {
