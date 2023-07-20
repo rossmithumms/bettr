@@ -116,7 +116,7 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
           tictoc::toc()
           ROracle::dbClearResult(rs)
           message(stringr::str_glue("... returning {dplyr::count(data)} rows"))
-          return(data)
+          data
         }) %>%
           data.table::rbindlist() %>%
           tibble::tibble() %>%
