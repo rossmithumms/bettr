@@ -123,8 +123,8 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
 
       output <- output %>%
           data.table::rbindlist() %>%
-          tibble::tibble() %>%
-          janitor::clean_names()
+          tibble::tibble() # %>%
+          # janitor::clean_names()
 
       message(".... THIS should actually result in a 16,500-ish number:")
       message(dplyr::count(output))
