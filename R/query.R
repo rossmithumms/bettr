@@ -166,7 +166,7 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
       ROracle::dbWriteTable(
         conn = conn,
         name = table_name,
-        value = rows,
+        value = rows %>% dplyr::mutate(key = as.numeric(NA), audit_insert_dt = as.Date(NA)),
         schema = schema,
         row.names = FALSE,
         append = TRUE
