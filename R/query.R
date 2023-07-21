@@ -155,54 +155,22 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
       schema <- get_db_username(connection_name)
       table_name <- toupper(table_name)
 
-      # If the table does not exist yet, create it
-      ensure_table(connection_name = connection_name, table_name = table_name)
-
-      # Then write rows into it
-      conn <- open_db_conn(connection_name = connection_name)
-      sql_statement <- paste0(
-        "INSERT INTO ",
-        get_db_username(connection_name), ".",
-        table_name, " (",
-        paste(
-          rows %>%
-            names() %>%
-            toupper(),
-          collapse = ", "
-        ),
-        ") VALUES (&",
-        paste(
-          rows %>%
-            names() %>%
-            toupper(),
-          collapse = ", &"
-        ),
-        ")"
+      # If the table does not exist yet, take note
+      table_exists <- exists_table(
+        connection_name = connection_name,
+        table_name = table_name
       )
-      # TODO filter rows down to columns in table
 
-      # TODO write rows one at a time to database
-      rows %>%
-        dplyr::rename_with(toupper) %>%
-        as.list() %>%
-        purrr::list_transpose() %>%
-        purrr::walk(~{
-          if (suppress_bind_logging == FALSE) {
-            message(stringr::str_glue("... querying {connection_name}: {sql_statement}"))
-            message(paste0(c("... binding: ", stringr::str_glue("{names(.)} = {paste(.)}; "))))
-          } else {
-            message("... binding: <suppressed>")
-          }
-          tictoc::tic()
-          result <- ROracle::dbSendQuery(conn, sql_statement, dplyr::bind_rows(.))
-          success <- ROracle::dbGetInfo(result)$completed
-          message(stringr::str_glue("... success: {success}"))
-          if (success == TRUE) {
-            ROracle::dbCommit(conn = conn)
-          }
-          ROracle::dbClearResult(result)
-          tictoc::toc()
-        })
+      # Append to the table, assuming it exists already
+      conn <- open_db_conn(connection_name = connection_name)
+      ROracle::dbWriteTable(
+        conn = conn,
+        name = table_name,
+        value = rows,
+        schema = schema,
+        row.names = FALSE,
+        append = TRUE
+      )
     },
 
     warning = function(warn) {
@@ -226,15 +194,17 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
 #' Note that this function depends on a SQL file named `create_table_<table_name>.sql`
 #' in the connection-specific directory.
 #' 
+#' @param rows Table structure with representative data for the table to create/verify.
 #' @param connection_name The snake_case name of the connection.
 #' @param table_name The snake_case name of the table to ensure exists in the database.
 #' @return Nothing
 #' @export
-ensure_table <- function(connection_name, table_name) {
+ensure_table <- function(rows, connection_name, table_name) {
   tryCatch({
       connection_name <- toupper(connection_name)
       conn <- open_db_conn(connection_name = connection_name)
       table_name <- toupper(table_name)
+      schema <- get_db_username(connection_name)
 
       # If the table does not exist yet, create it
       table_exists <- exists_table(
@@ -245,20 +215,36 @@ ensure_table <- function(connection_name, table_name) {
       message(stringr::str_glue("... table exists: {table_exists}"))
 
       if (table_exists == FALSE) {
-        result <- ROracle::dbSendQuery(  # execute(
+        # Create the table with the dbWriteTable API with one row,
+        # then delete the row.  This is the simplest way to ensure typing.
+        ROracle::dbWriteTable(
           conn = conn,
-          statement = load_sql(
-            tolower(stringr::str_glue("create_table_{table_name}")),
-            connection_name = connection_name
-          )
+          name = table_name,
+          value = rows %>% dplyr::slice_head(n = 1),
+          schema = schema,
+          row.names = FALSE,
+          override = FALSE,
+          append = FALSE
         )
 
-        success <- ROracle::dbGetInfo(result)$completed
-        if (success) {
-          ROracle::dbCommit(conn = conn)
-        }
-        ROracle::dbClearResult(result)
-        message(stringr::str_glue("+++ created table {table_name}, result: {success}"))
+        ROracle::dbSendQuery(
+          conn = conn,
+          statement = stringr::str_glue(
+            stringr::str_glue("DELETE FROM {table_name}")
+          ),
+          data.frame(table_name = table_name)
+        )
+
+        # Now initialize the table by appending auto-incrementing
+        # key columns, indexes, views, etc
+        execute_stmts(
+          conn = conn,
+          connection_name = connection_name,
+          sql_file = tolower(stringr::str_glue("init_{table_name}"))
+        )
+
+        ROracle::dbCommit(conn = conn)
+        message(stringr::str_glue("+++ initialized table: {table_name}"))
       } else {
         message(stringr::str_glue("+++ table already exists: {table_name}"))
       }
@@ -300,7 +286,7 @@ exists_table <- function(connection_name, table_name) {
       }
 
       # If the table does not exist yet, create it
-      rs <- ROracle::dbSendQuery(  # execute(
+      rs <- ROracle::dbSendQuery(
         conn = conn,
         statement = stringr::str_glue(
           "SELECT TABLE_NAME FROM USER_TABLES WHERE UPPER(TABLE_NAME) = &table_name"
@@ -339,7 +325,6 @@ exists_table <- function(connection_name, table_name) {
 drop_table <- function(connection_name, table_name) {
   tryCatch({
       connection_name <- toupper(connection_name)
-      conn <- open_db_conn(connection_name = connection_name)
       schema <- get_db_username(connection_name)
 
       # If the table does not exist yet, create it
@@ -348,21 +333,16 @@ drop_table <- function(connection_name, table_name) {
         table_name = table_name
       )
 
+      conn <- open_db_conn(connection_name = connection_name)
       if (table_exists == TRUE) {
-        result <- ROracle::dbSendQuery(
+        execute_stmts(
           conn = conn,
-          statement = load_sql(
-            tolower(stringr::str_glue("drop_table_{table_name}")),
-            connection_name = connection_name
-          )
+          connection_name = connection_name,
+          sql_file = tolower(stringr::str_glue("drop_{table_name}"))
         )
-        success <- ROracle::dbGetInfo(result)$completed
-        if (success) {
-          ROracle::dbCommit(conn = conn)
-        }
-        ROracle::dbClearResult(result)
-        message(stringr::str_glue("+++ drop table {table_name}, result: {success}"))
-        success
+ 
+        ROracle::dbCommit(conn = conn)
+        message(stringr::str_glue("+++ dropped table: {table_name}"))
       } else {
         message(stringr::str_glue("+++ table does not exist: {table_name}"))
         FALSE
@@ -382,6 +362,24 @@ drop_table <- function(connection_name, table_name) {
       close_db_conn(conn)
     }
   )
+}
+
+execute_stmts <- function(conn, connection_name, sql_file) {
+  stmts <- load_sql(
+      sql_file,
+      connection_name = connection_name
+    ) %>%
+    stringr::str_replace_all(pattern = "[ \t\r\n]+", replacement = " ") %>%
+    stringr::str_split(pattern = ";;;")
+
+  stmts %>%
+    purrr::pmap(~{
+      print(stringr::str_glue("... executing: {.}"))
+      ROracle::dbSendQuery(
+        conn = conn,
+        statement = .
+      )
+  })
 }
 
 #' Get URL Query Parameters
@@ -468,3 +466,4 @@ get_bind_colnames <- function(sql) {
     dplyr::pull(.data$X2) %>%
     toupper
 }
+
