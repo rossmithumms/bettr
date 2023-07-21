@@ -155,8 +155,9 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
       schema <- get_db_username(connection_name)
       table_name <- toupper(table_name)
 
-      # If the table does not exist yet, take note
-      table_exists <- exists_table(
+      # If the table does not exist yet, create and initialize it
+      ensure_table(
+        rows = rows,
         connection_name = connection_name,
         table_name = table_name
       )
