@@ -16,11 +16,20 @@ globalVariables(c("session", "parseQueryString"))
 #' @param connection_name Database connection name; prefix to env vars.
 #' @return A DBI connection object
 #' @export
-open_db_conn <- function(connection_name = "micpr") {
-  ROracle::dbConnect(drv = DBI::dbDriver("Oracle"),
-    username = get_db_username(connection_name),
-    password = get_db_password(connection_name),
-    dbname = get_db_name(connection_name)
+open_db_conn <- function(connection_name) {
+  tryCatch({
+      ROracle::dbConnect(drv = DBI::dbDriver("Oracle"),
+        username = get_db_username(connection_name),
+        password = get_db_password(connection_name),
+        dbname = get_db_name(connection_name)
+      )
+    }, warning = function(warn) {
+      warning(warn)
+    }, error = function(err) {
+      stop(err)
+    }, finally = {
+
+    }
   )
 }
 
