@@ -22,7 +22,7 @@ A tibble of the result set with cleaned column names.
 \description{
 This function allows for parameterized, batch SELECT queries to an Oracle connection.
 The SQL statement must be stored in a file located in the following path location:
-<SQL_DIR>/<CONNECTION_NAME>\if{html}{\out{<SQL>}}.sql
+<SQL_DIR>/<CONNECTION_NAME>/\if{html}{\out{<SQL>}}.sql
 }
 \details{
 The query will be called for each row in the args object (a data frame, data.table,

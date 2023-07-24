@@ -4,6 +4,31 @@
 # https://www.r-bloggers.com/2019/08/no-visible-binding-for-global-variable/
 globalVariables(c("session", "parseQueryString"))
 
+#' Get a Database Connection
+#' 
+#' This function returns a database connection from a simple pool.
+#' We expect each R script invocation to use 1 connection at most per data source.
+#' 
+#' @param connection_name Database connection name; prefix to env vars.
+#' @return A DBI connection object
+#' @export
+get_db_conn <- function(connection_name) {
+  connection_name <- toupper(connection_name)
+  if (exists("bettr_connection_pool") == FALSE) {
+    message("!!! creating new connection pool")
+    bettr_connection_pool <<- list()
+  }
+
+  if (connection_name %in% names(bettr_connection_pool) == FALSE) {
+    bettr_connection_pool[[connection_name]] <<- open_db_conn(
+      connection_name = connection_name
+    )
+    message(stringr::str_glue("+++ opened pool connection: {connection_name}"))
+  }
+
+  bettr_connection_pool[[connection_name]]
+}
+
 #' Open a Database Connection
 #'
 #' This function opens a database connection.
@@ -15,21 +40,12 @@ globalVariables(c("session", "parseQueryString"))
 #'
 #' @param connection_name Database connection name; prefix to env vars.
 #' @return A DBI connection object
-#' @export
 open_db_conn <- function(connection_name) {
-  tryCatch({
-      ROracle::dbConnect(drv = DBI::dbDriver("Oracle"),
-        username = get_db_username(connection_name),
-        password = get_db_password(connection_name),
-        dbname = get_db_name(connection_name)
-      )
-    }, warning = function(warn) {
-      warning(warn)
-    }, error = function(err) {
-      stop(err)
-    }, finally = {
-
-    }
+  connection_name <- toupper(connection_name)
+  ROracle::dbConnect(drv = DBI::dbDriver("Oracle"),
+    username = get_db_username(connection_name),
+    password = get_db_password(connection_name),
+    dbname = get_db_name(connection_name)
   )
 }
 
@@ -37,7 +53,6 @@ open_db_conn <- function(connection_name) {
 #'
 #' @param connection_name the snake_case name of the connection.
 #' @return The database username for that connection as defined in .Renviron
-#' @export
 get_db_username <- function(connection_name) {
   Sys.getenv(paste(toupper(connection_name), "CREDS", "USR", sep = "_"))
 }
@@ -46,7 +61,6 @@ get_db_username <- function(connection_name) {
 #'
 #' @param connection_name the snake_case name of the connection.
 #' @return The database password for that connection as defined in .Renviron
-#' @export
 get_db_password <- function(connection_name) {
   Sys.getenv(paste(toupper(connection_name), "CREDS", "PSW", sep = "_"))
 }
@@ -55,28 +69,31 @@ get_db_password <- function(connection_name) {
 #'
 #' @param connection_name the snake_case name of the connection.
 #' @return The database connection String as defined in .Renviron
-#' @export
 get_db_name <- function(connection_name) {
   Sys.getenv(paste(toupper(connection_name), "DB", "NAME", sep = "_"))
 }
 
-#' Close a Database Connection
+#' Close Database Connection Pool
 #'
-#' This function closes a database connection.
-#'
-#' @param conn The connection object to close.
-#' @return Response from DBI::dbDisconnect
+#' This function closes all database connections in the pool.
 #' @export
-close_db_conn <- function(conn) {
-  ROracle::dbDisconnect(conn)
-  message("... disconnected")
+close_db_conn_pool <- function() {
+  names(bettr_connection_pool) %>%
+    as.list() %>%
+    lapply(function(connection_name) {
+      message(stringr::str_glue("... closing connection {connection_name}"))
+      ROracle::dbDisconnect(bettr_connection_pool[[connection_name]])
+    })
+
+  bettr_connection_pool <- list()
+  message("!!! pool closed")
 }
 
 #' Get Rows from a Database
 #' 
 #' This function allows for parameterized, batch SELECT queries to an Oracle connection.
 #' The SQL statement must be stored in a file located in the following path location:
-#' <SQL_DIR>/<CONNECTION_NAME><SQL>.sql
+#' <SQL_DIR>/<CONNECTION_NAME>/<SQL>.sql
 #' 
 #' The query will be called for each row in the args object (a data frame, data.table, 
 #' or tibble).  The SQL file may expose bind parameters that will be used through the
@@ -98,7 +115,7 @@ close_db_conn <- function(conn) {
 get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE) {
   tryCatch({
       connection_name <- toupper(connection_name)
-      conn <- open_db_conn(connection_name = connection_name)
+      conn <- get_db_conn(connection_name = connection_name)
       sql_statement <- load_sql(sql = sql, connection_name = connection_name)
 
       binds %>%
@@ -141,8 +158,6 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
     },
 
     finally = {
-      message("+++ closing connection")
-      close_db_conn(conn)
     }
   )
 }
@@ -172,7 +187,7 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
       )
 
       # Append to the table, assuming it exists already
-      conn <- open_db_conn(connection_name = connection_name)
+      conn <- get_db_conn(connection_name = connection_name)
       ROracle::dbWriteTable(
         conn = conn,
         name = table_name,
@@ -193,7 +208,6 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
     },
 
     finally = {
-      close_db_conn(conn)
     }
   )
 }
@@ -208,11 +222,10 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
 #' @param connection_name The snake_case name of the connection.
 #' @param table_name The snake_case name of the table to ensure exists in the database.
 #' @return Nothing
-#' @export
 ensure_table <- function(rows, connection_name, table_name) {
   tryCatch({
       connection_name <- toupper(connection_name)
-      conn <- open_db_conn(connection_name = connection_name)
+      conn <- get_db_conn(connection_name = connection_name)
       table_name <- toupper(table_name)
       schema <- get_db_username(connection_name)
 
@@ -271,7 +284,6 @@ ensure_table <- function(rows, connection_name, table_name) {
     },
 
     finally = {
-      close_db_conn(conn)
     }
   )
 }
@@ -282,11 +294,10 @@ ensure_table <- function(rows, connection_name, table_name) {
 #' 
 #' @param connection_name The snake_case name of the connection.
 #' @param table_name The snake_case name of the table to drop.
-#' @export
 exists_table <- function(connection_name, table_name) {
   tryCatch({
       connection_name <- toupper(connection_name)
-      conn <- open_db_conn(connection_name = connection_name)
+      conn <- get_db_conn(connection_name = connection_name)
       table_name <- toupper(table_name)
       bad_characters <- stringr::str_detect(table_name, "[^_A-Za-z0-9]")
 
@@ -317,7 +328,6 @@ exists_table <- function(connection_name, table_name) {
     },
 
     finally = {
-      close_db_conn(conn)
     }
   )
 }
@@ -342,7 +352,7 @@ drop_table <- function(connection_name, table_name) {
         table_name = table_name
       )
 
-      conn <- open_db_conn(connection_name = connection_name)
+      conn <- get_db_conn(connection_name = connection_name)
       if (table_exists == TRUE) {
         execute_stmts(
           connection_name = connection_name,
@@ -367,65 +377,41 @@ drop_table <- function(connection_name, table_name) {
     },
 
     finally = {
-      close_db_conn(conn)
     }
   )
 }
 
-#' Execute One or More Transactional Statements
-#'
-#' Loads a SQL file by name (with no file extension) and connection name;
-#' runs each transactional statement, in order.
-#' Transactional statements must be delimited by `;;;`.  No leading or
-#' trailing delimiters; no comment lines currently allowed.
+#' Execute a Series of SQL Transactions
 #'
 #' @param connection_name The snake_case name of the connection.
-#' @param sql The name of the SQL file using this convention:
-#' <SQL_DIR>/<CONNECTION_NAME>/<SQL>.sql
+#' @param sql_file the SQL part of the pattern: <SQL_DIR>/<CONNECTION_NAME>/<SQL>.sql
+#' @return Nothing
 #' @export
-execute_stmts <- function(connection_name, sql) {
-  tryCatch({
-      connection_name <- toupper(connection_name)
-      conn <- open_db_conn(connection_name = connection_name)
+execute_stmts <- function(connection_name, sql_file) {
+  connection_name <- toupper(connection_name)
+  stmts <- load_sql(
+      sql_file,
+      connection_name = connection_name
+    ) %>%
+    stringr::str_replace_all(pattern = "[ \t\r\n]+", replacement = " ") %>%
+    stringr::str_split(pattern = ";;;")
 
-      stmts <- load_sql(
-          sql,
-          connection_name = connection_name
-        ) %>%
-        stringr::str_replace_all(pattern = "[ \t\r\n]+", replacement = " ") %>%
-        stringr::str_split(pattern = ";;;")
-
-      stmts[[1]] %>%
-        lapply(function(.) {
-          message(stringr::str_glue("... executing: {.}"))
-          ROracle::dbSendQuery(
-            conn = conn,
-            statement = .
-          )
-      })
-    },
-
-    warning = function(warn) {
-      warning(warn)
-    },
-
-    error = function(err) {
-      message(ROracle::dbGetException(conn))
-      stop(err)
-    },
-
-    finally = {
-      close_db_conn(conn)
-    }
-  )
+  stmts %>%
+    purrr::pmap(~{
+      print(stringr::str_glue("... executing: {.}"))
+      ROracle::dbSendQuery(
+        conn = get_db_conn(connection_name = connection_name),
+        statement = .
+      )
+  })
 }
 
 #' Get URL Query Parameters
-#' 
+#'
 #' What it says on the tin.  If the session contains a URL query,
 #' this sugar method retrieves it for you.  You can also test by passing
 #' a url_query.
-#' 
+#'
 #' @param url_query A URL query string to parse (optional).  If not passed, session URL query is used.
 #' @return Named list of values from URL query
 #' @export
@@ -453,7 +439,6 @@ get_url_query <- function(url_query = "") {
 #' This function refers to the environment variable SQL_DIR and retrieves it for use.
 #' 
 #' @return The path to the directory where SQL queries are stored.
-#' @export
 get_sql_dir <- function() {
   sql_dir <- Sys.getenv("SQL_DIR")
   
@@ -472,7 +457,6 @@ get_sql_dir <- function() {
 #' @param sql The snake_case name of the SQL file without the file extension (such as `get_test_data`).
 #' @param connection_name The snake_case name of the database connection.
 #' @return The SQL statement stored in the file.
-#' @export
 load_sql <- function(sql, connection_name = NA) {
   if (!is.na(stringr::str_match(sql, "[^-_a-zA-Z0-9]"))) {
     stop("!!! SQL file name contains illegal characters; stopping")

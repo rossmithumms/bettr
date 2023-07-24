@@ -4,9 +4,11 @@
 \alias{ensure_table}
 \title{Ensure a Table Exists for Appending Rows}
 \usage{
-ensure_table(connection_name, table_name)
+ensure_table(rows, connection_name, table_name)
 }
 \arguments{
+\item{rows}{Table structure with representative data for the table to create/verify.}
+
 \item{connection_name}{The snake_case name of the connection.}
 
 \item{table_name}{The snake_case name of the table to ensure exists in the database.}

@@ -13,7 +13,7 @@ CREATE VIEW V_BETTR_TEST_DATA (
 
 AS (
   SELECT
-    BETTR_TEST_DATA_KEY
+    KEY BETTR_TEST_DATA_KEY
     , "value_str"
     , "value_num"
     , "value_dt"

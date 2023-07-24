@@ -1,32 +1,6 @@
 readRenviron("/workspaces/brain/.Renviron")
 Sys.setenv(SQL_DIR = Sys.getenv("BETTR_SQL_DIR"))
 
-test_that("we can create a table and delete it", {
-    dummy_data <- tibble::tibble(
-      foo = c(1, 2, 3),
-      bar = c("a", "b", "c")
-    )
-
-    tictoc::tic()
-    result <- bettr::ensure_table(
-      rows = dummy_data,
-      connection_name = "app_dqhi_dev",
-      table_name = "bettr_test_dummy"
-    )
-    tictoc::toc()
-
-    expect_equal(TRUE, result)
-
-    message("----- we can delete it")
-    tictoc::tic()
-    bettr::drop_table(
-      connection_name = "app_dqhi_dev",
-      table_name = "bettr_test_dummy"
-    )
-    tictoc::toc()
-  }
-)
-
 test_that("we can create a table, append data to it, pull data from it, and drop the table", {
     rows <- tibble::tibble(
       value_str = c("Anne", "Betsy", "Cathy", "Donna"),
@@ -39,19 +13,7 @@ test_that("we can create a table, append data to it, pull data from it, and drop
       )
     )
 
-    message("----- we can create a table")
-    tictoc::tic()
-    result <- bettr::ensure_table(
-      rows = rows,
-      connection_name = "app_dqhi_dev",
-      table_name = "bettr_test_data"
-    )
-    tictoc::toc()
-
-    expect_equal(TRUE, result)
-
-    message("----- we can append data to it")
-    tictoc::tic()
+    message("----- we can create a table and append data to it")
     result <- bettr::append_rows(
       rows = rows,
       connection_name = "app_dqhi_dev",
@@ -90,8 +52,10 @@ test_that("we can create a table, append data to it, pull data from it, and drop
     )
 
     testthat::expect_equal(
-      actual %>% dplyr::select(value_dt) %>% dplyr::pull() %>% format(format = "%H:%M:%S"),
-      expected %>% dplyr::select(value_dt) %>% dplyr::pull() %>% format(format = "%H:%M:%S")
+      actual %>% dplyr::select(value_dt) %>% 
+        dplyr::pull() %>% format(format = "%H:%M:%S"),
+      expected %>% dplyr::select(value_dt) %>%
+        dplyr::pull() %>% format(format = "%H:%M:%S")
     )
 
     message("----- we can delete it")

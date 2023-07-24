@@ -4,7 +4,7 @@
 \alias{open_db_conn}
 \title{Open a Database Connection}
 \usage{
-open_db_conn(connection_name = "micpr")
+open_db_conn(connection_name)
 }
 \arguments{
 \item{connection_name}{Database connection name; prefix to env vars.}
