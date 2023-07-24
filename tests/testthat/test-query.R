@@ -7,19 +7,23 @@ test_that("we can create a table and delete it", {
       bar = c("a", "b", "c")
     )
 
+    tictoc::tic()
     result <- bettr::ensure_table(
       rows = dummy_data,
       connection_name = "app_dqhi_dev",
       table_name = "bettr_test_dummy"
     )
+    tictoc::toc()
 
     expect_equal(TRUE, result)
 
     message("----- we can delete it")
+    tictoc::tic()
     bettr::drop_table(
       connection_name = "app_dqhi_dev",
       table_name = "bettr_test_dummy"
     )
+    tictoc::toc()
   }
 )
 
@@ -36,21 +40,25 @@ test_that("we can create a table, append data to it, pull data from it, and drop
     )
 
     message("----- we can create a table")
+    tictoc::tic()
     result <- bettr::ensure_table(
       rows = rows,
       connection_name = "app_dqhi_dev",
       table_name = "bettr_test_data"
     )
+    tictoc::toc()
 
     expect_equal(TRUE, result)
 
     message("----- we can append data to it")
+    tictoc::tic()
     result <- bettr::append_rows(
       rows = rows,
       connection_name = "app_dqhi_dev",
       table_name = "bettr_test_data",
       suppress_bind_logging = TRUE
     )
+    tictoc::toc()
 
     message("----- we can pull data from it")
     actual <- tibble::tibble(
@@ -62,12 +70,14 @@ test_that("we can create a table, append data to it, pull data from it, and drop
       )
     )
 
+    tictoc::tic()
     expected <- tibble::tibble(value_num = 2) %>%
       bettr::get_rows(
         connection_name = "app_dqhi_dev",
         sql = "get_bettr_test_data_by_number"
       ) %>%
       tibble::tibble()
+    tictoc::toc()
 
     testthat::expect_equal(
       actual %>% dplyr::select(value_num) %>% dplyr::pull(),
@@ -85,9 +95,11 @@ test_that("we can create a table, append data to it, pull data from it, and drop
     )
 
     message("----- we can delete it")
+    tictoc::tic()
     bettr::drop_table(
       connection_name = "app_dqhi_dev",
       table_name = "bettr_test_data"
     )
+    tictoc::toc()
   }
 )

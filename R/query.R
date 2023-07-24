@@ -248,9 +248,8 @@ ensure_table <- function(rows, connection_name, table_name) {
         # Now initialize the table by appending auto-incrementing
         # key columns, indexes, views, etc
         execute_stmts(
-          conn = conn,
           connection_name = connection_name,
-          sql_file = tolower(stringr::str_glue("init_{table_name}"))
+          sql = tolower(stringr::str_glue("init_{table_name}"))
         )
 
         ROracle::dbCommit(conn = conn)
@@ -346,9 +345,8 @@ drop_table <- function(connection_name, table_name) {
       conn <- open_db_conn(connection_name = connection_name)
       if (table_exists == TRUE) {
         execute_stmts(
-          conn = conn,
           connection_name = connection_name,
-          sql_file = tolower(stringr::str_glue("drop_{table_name}"))
+          sql = tolower(stringr::str_glue("drop_{table_name}"))
         )
  
         ROracle::dbCommit(conn = conn)
@@ -374,22 +372,52 @@ drop_table <- function(connection_name, table_name) {
   )
 }
 
-execute_stmts <- function(conn, connection_name, sql_file) {
-  stmts <- load_sql(
-      sql_file,
-      connection_name = connection_name
-    ) %>%
-    stringr::str_replace_all(pattern = "[ \t\r\n]+", replacement = " ") %>%
-    stringr::str_split(pattern = ";;;")
+#' Execute One or More Transactional Statements
+#'
+#' Loads a SQL file by name (with no file extension) and connection name;
+#' runs each transactional statement, in order.
+#' Transactional statements must be delimited by `;;;`.  No leading or
+#' trailing delimiters; no comment lines currently allowed.
+#'
+#' @param connection_name The snake_case name of the connection.
+#' @param sql The name of the SQL file using this convention:
+#' <SQL_DIR>/<CONNECTION_NAME>/<SQL>.sql
+#' @export
+execute_stmts <- function(connection_name, sql) {
+  tryCatch({
+      connection_name <- toupper(connection_name)
+      conn <- open_db_conn(connection_name = connection_name)
 
-  stmts %>%
-    purrr::pmap(~{
-      print(stringr::str_glue("... executing: {.}"))
-      ROracle::dbSendQuery(
-        conn = conn,
-        statement = .
-      )
-  })
+      stmts <- load_sql(
+          sql,
+          connection_name = connection_name
+        ) %>%
+        stringr::str_replace_all(pattern = "[ \t\r\n]+", replacement = " ") %>%
+        stringr::str_split(pattern = ";;;")
+
+      stmts[[1]] %>%
+        lapply(function(.) {
+          message(stringr::str_glue("... executing: {.}"))
+          ROracle::dbSendQuery(
+            conn = conn,
+            statement = .
+          )
+      })
+    },
+
+    warning = function(warn) {
+      warning(warn)
+    },
+
+    error = function(err) {
+      message(ROracle::dbGetException(conn))
+      stop(err)
+    },
+
+    finally = {
+      close_db_conn(conn)
+    }
+  )
 }
 
 #' Get URL Query Parameters
@@ -476,4 +504,3 @@ get_bind_colnames <- function(sql) {
     dplyr::pull(.data$X2) %>%
     toupper
 }
-
