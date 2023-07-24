@@ -123,18 +123,18 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
         dplyr::select(get_bind_colnames(sql_statement)) %>%
         as.list() %>%
         purrr::list_transpose() %>%
-        purrr::map(~{
+        lapply(function(row_binds) {
           message(stringr::str_glue("... querying {connection_name}: {sql}"))
           if (suppress_bind_logging == FALSE) {
             message(paste0(c(
                 "... binding: ",
-                stringr::str_glue("{names(.)} = {paste(.)}; ")
+                stringr::str_glue("{names(row_binds)} = {paste(row_binds)}; ")
             )))
           } else {
             message("... binding: <suppressed>")
           }
           tictoc::tic()
-          rs <- ROracle::dbSendQuery(conn, sql_statement, dplyr::bind_rows(.))
+          rs <- ROracle::dbSendQuery(conn, sql_statement, dplyr::bind_rows(row_binds))
           tictoc::toc()
           message("... fetching")
           tictoc::tic()
@@ -397,12 +397,12 @@ execute_stmts <- function(connection_name, sql_file) {
     stringr::str_replace_all(pattern = "[ \t\r\n]+", replacement = " ") %>%
     stringr::str_split(pattern = ";;;")
 
-  stmts %>%
-    purrr::pmap(~{
-      print(stringr::str_glue("... executing: {.}"))
+  stmts[[1]] %>%
+    lapply(function(stmt) {
+      print(stringr::str_glue("... executing: {stmt}"))
       ROracle::dbSendQuery(
         conn = get_db_conn(connection_name = connection_name),
-        statement = .
+        statement = stmt
       )
   })
 }
