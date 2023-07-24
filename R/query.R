@@ -15,7 +15,7 @@ globalVariables(c("session", "parseQueryString"))
 get_db_conn <- function(connection_name) {
   connection_name <- toupper(connection_name)
   if (exists("bettr_connection_pool") == FALSE) {
-    message("!!! creating new connection pool")
+    message("+++ creating new connection pool")
     bettr_connection_pool <<- list()
   }
 
@@ -222,6 +222,7 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
 #' @param connection_name The snake_case name of the connection.
 #' @param table_name The snake_case name of the table to ensure exists in the database.
 #' @return Nothing
+#' @export
 ensure_table <- function(rows, connection_name, table_name) {
   tryCatch({
       connection_name <- toupper(connection_name)
