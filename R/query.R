@@ -133,13 +133,9 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
           } else {
             message("... binding: <suppressed>")
           }
-          tictoc::tic()
           rs <- ROracle::dbSendQuery(conn, sql_statement, dplyr::bind_rows(row_binds))
-          tictoc::toc()
           message("... fetching")
-          tictoc::tic()
           data <- ROracle::fetch(rs)
-          tictoc::toc()
           ROracle::dbClearResult(rs)
           message(stringr::str_glue("... returning {dplyr::count(data)} rows"))
           data
@@ -392,6 +388,10 @@ drop_table <- function(connection_name, table_name) {
 execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
    suppress_bind_logging = FALSE) {
   connection_name <- toupper(connection_name)
+  conn <- get_db_conn(connection_name = connection_name)
+  binds <- binds %>%
+    tibble::as_tibble() %>%
+    dplyr::rename_with(toupper)
   stmts <- load_sql(
       sql_file,
       connection_name = connection_name
@@ -400,10 +400,16 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
     stringr::str_split(pattern = ";;;")
   row_bind_ct <- dplyr::count(binds) %>% dplyr::pull()
 
+  # Iterate over statements and excute them
   stmts[[1]] %>%
     lapply(function(stmt) {
+      print(stringr::str_glue("... executing: {stmt}"))
+      # If there are 0 or 1 rows of bind parameters, don't iterate over them;
+      # otherwise, iterate over row binds within statements (statement-major)
       if (row_bind_ct < 2) {
-        print(stringr::str_glue("... executing: {stmt}"))
+        binds <- binds %>%
+          dplyr::select(get_bind_colnames(stmt))
+        # Only log binds if there are any
         if (row_bind_ct == 1) {
           if (suppress_bind_logging == FALSE) {
             message(paste0(c(
@@ -416,19 +422,18 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
         }
 
         ROracle::dbSendQuery(
-          conn = get_db_conn(connection_name = connection_name),
+          conn = conn,
           statement = stmt,
-          data = binds %>%
-            tibble::tibble() %>%
-            dplyr::rename_with(toupper) %>%
-            dplyr::select(get_bind_colnames(stmt))
+          data = binds
         )
       } else {
         binds %>%
           as.list() %>%
           purrr::list_transpose() %>%
           lapply(function(row_binds) {
-            print(stringr::str_glue("... executing: {stmt}"))
+            row_binds <- row_binds %>%
+              tibble::as_tibble() %>%
+              dplyr::select(get_bind_colnames(stmt))
             if (suppress_bind_logging == FALSE) {
               message(paste0(c(
                   "... binding: ",
@@ -438,16 +443,16 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
               message("... binding: <suppressed>")
             }
             ROracle::dbSendQuery(
-              conn = get_db_conn(connection_name = connection_name),
+              conn = conn,
               statement = stmt,
-              data = row_binds %>%
-                tibble::tibble() %>%
-                dplyr::rename_with(toupper) %>%
-                dplyr::select(get_bind_colnames(stmt))
+              data = row_binds
             )
           })
       }
   })
+
+  # Finalize the work
+  ROracle::dbCommit(conn = conn)
 }
 
 #' Get URL Query Parameters

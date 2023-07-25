@@ -1,13 +1,13 @@
 readRenviron("/workspaces/brain/.Renviron")
 Sys.setenv(SQL_DIR = Sys.getenv("BETTR_SQL_DIR"))
 
-withr::defer({
-  message("!!! testing over; cleanup time")
-  bettr::drop_table(
-    connection_name = "app_dqhi_dev",
-    table_name = "bettr_test_data"
-  )
-})
+# withr::defer({
+#   message("!!! testing over; cleanup time")
+#   bettr::drop_table(
+#     connection_name = "app_dqhi_dev",
+#     table_name = "bettr_test_data"
+#   )
+# })
 
 testthat::test_that("we can create a table, append data to it, pull data from it, and drop the table", {
     rows <- tibble::tibble(
@@ -201,7 +201,7 @@ testthat::test_that("We can run one or more transactions with zero, one, or many
     # TODO test that there is a row with value_num = 6, named Francine
     testthat::expect_equal(
       1,
-      tibble::tibble(value_num = 5) %>%
+      tibble::tibble(value_num = 6) %>%
         bettr::get_rows(
           connection_name = "app_dqhi_dev",
           sql = "get_bettr_test_data_by_number"
@@ -225,7 +225,7 @@ testthat::test_that("We can run one or more transactions with zero, one, or many
     # TODO test that there are no longer any rows with value_num in (5, 6)
     testthat::expect_equal(
       0,
-      tibble::tibble(value_num = 5) %>%
+      tibble::tibble(value_num = 8) %>%
         bettr::get_rows(
           connection_name = "app_dqhi_dev",
           sql = "get_bettr_test_data_by_number"
@@ -238,7 +238,7 @@ testthat::test_that("We can run one or more transactions with zero, one, or many
     # TODO test that there are two new rows with value_num (7, 8)
     testthat::expect_equal(
       2,
-      tibble::tibble(value_num = 5) %>%
+      tibble::tibble(value_num = 8) %>%
         bettr::get_rows(
           connection_name = "app_dqhi_dev",
           sql = "get_bettr_test_data_by_number"
