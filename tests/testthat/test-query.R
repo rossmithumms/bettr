@@ -1,13 +1,13 @@
 readRenviron("/workspaces/brain/.Renviron")
 Sys.setenv(SQL_DIR = Sys.getenv("BETTR_SQL_DIR"))
 
-# withr::defer({
-#   message("!!! testing over; cleanup time")
-#   bettr::drop_table(
-#     connection_name = "app_dqhi_dev",
-#     table_name = "bettr_test_data"
-#   )
-# })
+withr::defer({
+  message("!!! testing over; cleanup time")
+  bettr::drop_table(
+    connection_name = "app_dqhi_dev",
+    table_name = "bettr_test_data"
+  )
+})
 
 testthat::test_that("we can create a table, append data to it, pull data from it, and drop the table", {
     rows <- tibble::tibble(
