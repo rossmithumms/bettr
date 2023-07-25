@@ -345,7 +345,6 @@ exists_table <- function(connection_name, table_name) {
 drop_table <- function(connection_name, table_name) {
   tryCatch({
       connection_name <- toupper(connection_name)
-      schema <- get_db_username(connection_name)
 
       # If the table does not exist yet, create it
       table_exists <- exists_table(
@@ -359,7 +358,7 @@ drop_table <- function(connection_name, table_name) {
           connection_name = connection_name,
           sql = tolower(stringr::str_glue("drop_{table_name}"))
         )
- 
+
         ROracle::dbCommit(conn = conn)
         message(stringr::str_glue("+++ dropped table: {table_name}"))
       } else {
@@ -386,9 +385,12 @@ drop_table <- function(connection_name, table_name) {
 #'
 #' @param connection_name The snake_case name of the connection.
 #' @param sql_file the SQL part of the pattern: <SQL_DIR>/<CONNECTION_NAME>/<SQL>.sql
+#' @param binds An optional tibble for specifying bind parameters; must have 0 or 1 rows
+#' @param suppress_bind_logging Optionally suppress the logging of bind parameters (defaults to false).
 #' @return Nothing
 #' @export
-execute_stmts <- function(connection_name, sql_file) {
+execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
+   suppress_bind_logging = FALSE) {
   connection_name <- toupper(connection_name)
   stmts <- load_sql(
       sql_file,
@@ -396,14 +398,55 @@ execute_stmts <- function(connection_name, sql_file) {
     ) %>%
     stringr::str_replace_all(pattern = "[ \t\r\n]+", replacement = " ") %>%
     stringr::str_split(pattern = ";;;")
+  row_bind_ct <- dplyr::count(binds) %>% dplyr::pull()
 
   stmts[[1]] %>%
     lapply(function(stmt) {
-      print(stringr::str_glue("... executing: {stmt}"))
-      ROracle::dbSendQuery(
-        conn = get_db_conn(connection_name = connection_name),
-        statement = stmt
-      )
+      if (row_bind_ct < 2) {
+        print(stringr::str_glue("... executing: {stmt}"))
+        if (row_bind_ct == 1) {
+          if (suppress_bind_logging == FALSE) {
+            message(paste0(c(
+                "... binding: ",
+                stringr::str_glue("{names(binds)} = {paste(binds)}; ")
+            )))
+          } else {
+            message("... binding: <suppressed>")
+          }
+        }
+
+        ROracle::dbSendQuery(
+          conn = get_db_conn(connection_name = connection_name),
+          statement = stmt,
+          data = binds %>%
+            tibble::tibble() %>%
+            dplyr::rename_with(toupper) %>%
+            dplyr::select(get_bind_colnames(stmt))
+        )
+      } else {
+        binds %>%
+          as.list() %>%
+          purrr::list_transpose() %>%
+          lapply(function(row_binds) {
+            print(stringr::str_glue("... executing: {stmt}"))
+            if (suppress_bind_logging == FALSE) {
+              message(paste0(c(
+                  "... binding: ",
+                  stringr::str_glue("{names(row_binds)} = {paste(row_binds)}; ")
+              )))
+            } else {
+              message("... binding: <suppressed>")
+            }
+            ROracle::dbSendQuery(
+              conn = get_db_conn(connection_name = connection_name),
+              statement = stmt,
+              data = row_binds %>%
+                tibble::tibble() %>%
+                dplyr::rename_with(toupper) %>%
+                dplyr::select(get_bind_colnames(stmt))
+            )
+          })
+      }
   })
 }
 

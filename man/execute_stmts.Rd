@@ -4,12 +4,21 @@
 \alias{execute_stmts}
 \title{Execute a Series of SQL Transactions}
 \usage{
-execute_stmts(connection_name, sql_file)
+execute_stmts(
+  connection_name,
+  sql_file,
+  binds = tibble::tibble(),
+  suppress_bind_logging = FALSE
+)
 }
 \arguments{
 \item{connection_name}{The snake_case name of the connection.}
 
 \item{sql_file}{the SQL part of the pattern: <SQL_DIR>/<CONNECTION_NAME>/\if{html}{\out{<SQL>}}.sql}
+
+\item{binds}{An optional tibble for specifying bind parameters; must have 0 or 1 rows}
+
+\item{suppress_bind_logging}{Optionally suppress the logging of bind parameters (defaults to false).}
 }
 \value{
 Nothing
