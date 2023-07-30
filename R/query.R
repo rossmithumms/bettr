@@ -447,12 +447,12 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
               statement = stmt,
               data = row_binds
             )
+
+            # Finalize the work
+            ROracle::dbCommit(conn = conn)
           })
       }
   })
-
-  # Finalize the work
-  ROracle::dbCommit(conn = conn)
 }
 
 #' Get URL Query Parameters
