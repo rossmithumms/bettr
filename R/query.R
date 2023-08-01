@@ -426,6 +426,9 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
           statement = stmt,
           data = binds
         )
+
+        # Finalize the work
+        ROracle::dbCommit(conn = conn)
       } else {
         binds %>%
           as.list() %>%
