@@ -1,5 +1,6 @@
 readRenviron("/workspaces/brain/.Renviron")
 Sys.setenv(SQL_DIR = Sys.getenv("BETTR_SQL_DIR"))
+test_tz <- Sys.getenv("TZ")
 
 withr::defer({
   message("!!! testing over; cleanup time")
@@ -14,10 +15,10 @@ testthat::test_that("we can create a table, append data to it, pull data from it
       value_str = c("Anne", "Betsy", "Cathy", "Donna"),
       value_num = c(1, 2, 3, 4),
       value_dt = c(
-        lubridate::ymd_hms("20230501 00:00:00"),
-        lubridate::ymd_hms("20230502 01:01:01"),
-        lubridate::ymd_hms("20230503 02:02:02"),
-        lubridate::ymd_hms("20230503 03:03:03")
+        lubridate::ymd_hms("20230501 00:00:00", tz = test_tz),
+        lubridate::ymd_hms("20230502 01:01:01", tz = test_tz),
+        lubridate::ymd_hms("20230503 02:02:02", tz = test_tz),
+        lubridate::ymd_hms("20230503 03:03:03", tz = test_tz)
       )
     )
 

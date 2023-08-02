@@ -192,6 +192,8 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
         row.names = FALSE,
         append = TRUE
       )
+
+      ROracle::dbCommit(conn = conn)
     },
 
     warning = function(warn) {
