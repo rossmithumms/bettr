@@ -1,4 +1,5 @@
 readRenviron("/workspaces/brain/.Renviron")
+readRenviron("/workspaces/brain/.Renviron.test")
 Sys.setenv(SQL_DIR = Sys.getenv("BETTR_SQL_DIR"))
 test_tz <- Sys.getenv("TZ")
 
