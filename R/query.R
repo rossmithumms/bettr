@@ -172,7 +172,7 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
 append_rows <- function(rows, connection_name, table_name, suppress_bind_logging = FALSE) {
   tryCatch({
       connection_name <- toupper(connection_name)
-      schema <- get_db_username(connection_name)
+      schema <- toupper(get_db_username(connection_name))
       table_name <- toupper(table_name)
 
       # If the table does not exist yet, create and initialize it
@@ -226,7 +226,7 @@ ensure_table <- function(rows, connection_name, table_name) {
       connection_name <- toupper(connection_name)
       conn <- get_db_conn(connection_name = connection_name)
       table_name <- toupper(table_name)
-      schema <- get_db_username(connection_name)
+      schema <- toupper(get_db_username(connection_name))
 
       # If the table does not exist yet, create it
       table_exists <- exists_table(
@@ -542,3 +542,4 @@ get_bind_colnames <- function(sql) {
     dplyr::pull(.data$X2) %>%
     toupper
 }
+
