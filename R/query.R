@@ -135,7 +135,8 @@ get_rows <- function(binds = FALSE, connection_name, sql, suppress_bind_logging 
 #' then bound and packaged as a tibble for returning.
 #' Delegate function from get_rows().
 get_rows_binds <- function(binds, connection_name, sql, suppress_bind_logging = FALSE) {
-  tryCatch({
+  tryCatch(
+    {
       connection_name <- toupper(connection_name)
       conn <- get_db_conn(connection_name = connection_name)
       sql_statement <- load_sql(sql = sql, connection_name = connection_name)
@@ -193,7 +194,7 @@ get_rows_nobinds <- function(connection_name, sql) {
       sql_statement <- load_sql(sql = sql, connection_name = connection_name)
 
       message(stringr::str_glue("... querying {connection_name}: {sql}"))
-      rs <- ROracle::dbSendQuery(conn, sql_statement)
+      rs <- ROracle::dbSendQuery(conn, sql_statement, tibble::tibble())
       message("... fetching")
       data <- ROracle::fetch(rs)
       ROracle::dbClearResult(rs)
