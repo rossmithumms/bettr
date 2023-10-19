@@ -43,6 +43,19 @@ testthat::test_that("we can create a table, append data to it, pull data from it
     )
 
     tictoc::tic()
+    expected <- bettr::get_rows(
+      connection_name = "app_dqhi_dev",
+      sql = "get_bettr_test_data"
+    ) %>%
+      tibble::tibble()
+    tictoc::toc()
+
+    testthat::expect_equal(
+      rows %>% dplyr::summarise(n = dplyr::n()),
+      expected %>% dplyr::summarise(n = dplyr::n())
+    )
+
+    tictoc::tic()
     expected <- tibble::tibble(value_num = 2) %>%
       bettr::get_rows(
         connection_name = "app_dqhi_dev",

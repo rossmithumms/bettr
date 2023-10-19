@@ -112,7 +112,29 @@ close_db_conn_pool <- function() {
 #' @param suppress_bind_logging Optionally suppress the logging of bind parameters (defaults to false).
 #' @return A tibble of the result set with cleaned column names.
 #' @export
-get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE) {
+get_rows <- function(binds = FALSE, connection_name, sql, suppress_bind_logging = FALSE) {
+  if (binds == FALSE) {
+    get_rows_nobinds(
+      connection_name = connection_name,
+      sql = sql
+    )
+  } else {
+    get_rows_binds(
+      binds = binds,
+      connection_name = connection_name,
+      sql = sql,
+      suppress_bind_logging = suppress_bind_logging
+    )
+  }
+}
+
+#' Get Rows from a Database With Bind Parameters
+#' 
+#' Calls the SELECT query while passing bind parameters.
+#' Multiple rows of bind parameters are queried in series,
+#' then bound and packaged as a tibble for returning.
+#' Delegate function from get_rows().
+get_rows_binds <- function(binds, connection_name, sql, suppress_bind_logging = FALSE) {
   tryCatch({
       connection_name <- toupper(connection_name)
       conn <- get_db_conn(connection_name = connection_name)
@@ -157,6 +179,43 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
     }
   )
 }
+
+#' Get Rows from a Database Without Bind Parameters
+#' 
+#' Calls the SELECT query without passing any bind parameters;
+#' no fancy row-wise manipulation to spread the logic out.
+#' Delegate function from get_rows().
+get_rows_nobinds <- function(connection_name, sql) {
+  tryCatch(
+    {
+      connection_name <- toupper(connection_name)
+      conn <- get_db_conn(connection_name = connection_name)
+      sql_statement <- load_sql(sql = sql, connection_name = connection_name)
+
+      message(stringr::str_glue("... querying {connection_name}: {sql}"))
+      rs <- ROracle::dbSendQuery(conn, sql_statement)
+      message("... fetching")
+      data <- ROracle::fetch(rs)
+      ROracle::dbClearResult(rs)
+      message(stringr::str_glue("... returning {dplyr::count(data)} rows"))
+      data %>%
+        tibble::as_tibble(.name_repair = snakecase::to_snake_case)
+    },
+
+    warning = function(warn) {
+      warning(warn)
+    },
+
+    error = function(err) {
+      message(ROracle::dbGetException(conn))
+      stop(err)
+    },
+
+    finally = {
+    }
+  )
+}
+
 
 #' Append Rows to a Table
 #'
