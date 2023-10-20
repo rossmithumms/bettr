@@ -4,7 +4,7 @@
 \alias{get_rows}
 \title{Get Rows from a Database}
 \usage{
-get_rows(binds = FALSE, connection_name, sql, suppress_bind_logging = FALSE)
+get_rows(binds, connection_name, sql, suppress_bind_logging = FALSE)
 }
 \arguments{
 \item{binds}{a data frame, data.table, or tibble with bind parameters.  Query will be called once for each row.}

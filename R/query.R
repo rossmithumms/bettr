@@ -112,8 +112,8 @@ close_db_conn_pool <- function() {
 #' @param suppress_bind_logging Optionally suppress the logging of bind parameters (defaults to false).
 #' @return A tibble of the result set with cleaned column names.
 #' @export
-get_rows <- function(binds = FALSE, connection_name, sql, suppress_bind_logging = FALSE) {
-  if (binds == FALSE) {
+get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE) {
+  if (missing(binds)) {
     get_rows_nobinds(
       connection_name = connection_name,
       sql = sql
