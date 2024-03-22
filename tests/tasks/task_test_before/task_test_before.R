@@ -1,0 +1,9 @@
+# This file is run directly in the R session created for it.
+# Envirnoment variables needed by bettr are already loaded.
+# Use the `task_args` object to get query parameters.
+# Have fun!
+
+bettr::execute_stmts(
+  connection_name = "APP_DQHI_DEV",
+  sql_file = "init_bettr_task_test"
+)

@@ -2,7 +2,7 @@
 #' @importFrom rlang .data
 
 # https://www.r-bloggers.com/2019/08/no-visible-binding-for-global-variable/
-globalVariables(c("session", "parseQueryString"))
+globalVariables(c("session", "parseQueryString", "bettr_connection_pool"))
 
 #' Get a Database Connection
 #' 
