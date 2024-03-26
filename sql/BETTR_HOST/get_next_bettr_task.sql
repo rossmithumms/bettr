@@ -1,0 +1,34 @@
+WITH GET_TASKS_WITH_HB_DIFF AS (
+  SELECT
+    BT.*
+    , round (
+      extract ( day from SYSDATE - BT.LAST_HB_DT ) * 14400 +
+      extract ( hour from SYSDATE - BT.LAST_HB_DT ) * 60  +
+      extract ( minute from SYSDATE - BT.LAST_HB_DT )
+    ) LAST_HB_MINS
+  FROM
+    V_BETTR_TASK BT
+  WHERE
+    BT.BETTR_TASK_GIT_PROJECT = &BETTR_TASK_GIT_PROJECT
+    AND BT.BETTR_TASK_GIT_BRANCH = &BETTR_TASK_GIT_BRANCH
+)
+
+SELECT
+  GTWHD.*
+FROM
+  GET_TASKS_WITH_HB_DIFF GTWHD
+WHERE
+  GTWHD.LAST_STATUS IN (
+    0 -- Not Started
+    , 20 -- Failed
+  ) OR (
+    GTWHD.LAST_STATUS NOT IN (
+      10 -- Started
+      , 21 -- Failed, No Retry
+    ) AND GTWHD.OPT_CACHE_EXPIRY > 0
+    AND GTWHD.LAST_HB > GTWHD.OPT_CACHE_EXPIRY
+  )
+ORDER BY
+  GTWHD.BETTR_TASK_JOB_PRIORITY
+  , GTWHD.BETTR_TASK_SORT
+  , GTWHD.LAST_HB_MINS DESC

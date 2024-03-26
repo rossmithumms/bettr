@@ -4,7 +4,7 @@
 \alias{get_sql_dir}
 \title{Get the Directory where SQL Queries are Stored}
 \usage{
-get_sql_dir()
+get_sql_dir(connection_name = "")
 }
 \value{
 The path to the directory where SQL queries are stored.

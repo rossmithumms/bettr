@@ -250,7 +250,8 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
         value = rows %>% dplyr::mutate(key = as.numeric(NA), audit_insert_dt = as.Date(NA)),
         schema = schema,
         row.names = FALSE,
-        append = TRUE
+        append = TRUE,
+        ora.number = FALSE
       )
 
       ROracle::dbCommit(conn = conn)
@@ -553,10 +554,16 @@ get_url_query <- function(url_query = "") {
 #' This function refers to the environment variable SQL_DIR and retrieves it for use.
 #' 
 #' @return The path to the directory where SQL queries are stored.
-get_sql_dir <- function() {
+get_sql_dir <- function(connection_name = "") {
+  # TODO when interacting with the bettr host database,
+  # only look for SQL inside the local package
+  if (connection_name == "BETTR_HOST") {
+    return(paste(system.file(package = "bettr"), "sql", sep = .Platform$file.sep))
+  }
+
   sql_dir <- Sys.getenv("SQL_DIR")
-  
-  if (is.na(sql_dir) | sql_dir == "") {
+
+  if (is.na(sql_dir) || sql_dir == "") {
     stop("!!! \"sql_dir\" must be defined for bettr to function")
   }
 
@@ -577,7 +584,9 @@ load_sql <- function(sql, connection_name = NA) {
   }
 
   sql_path <- here::here(
-    get_sql_dir(), toupper(connection_name), paste(sql,  "sql", sep = ".")
+    get_sql_dir(connection_name = toupper(connection_name)),
+    toupper(connection_name),
+    paste(sql,  "sql", sep = ".")
   ) #nolint
 
   if (file.exists(sql_path)) {
