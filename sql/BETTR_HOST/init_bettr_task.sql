@@ -10,7 +10,7 @@ ALTER TABLE APP_DQHI_DEV.BETTR_TASK
 ;;;CREATE INDEX IDX_BETTR_TASK_BETTR_TASK_JOB_PRIORITY ON APP_DQHI_DEV.BETTR_TASK("bettr_task_job_priority")
 ;;;CREATE INDEX IDX_BETTR_TASK_BETTR_TASK_SORT ON APP_DQHI_DEV.BETTR_TASK("bettr_task_sort")
 ;;;CREATE INDEX IDX_BETTR_TASK_OPT_START_DT ON APP_DQHI_DEV.BETTR_TASK("opt_start_dt")
-;;;CREATE INDEX IDX_BETTR_TASK_OPT_CACHE_EXPIRY ON APP_DQHI_DEV.BETTR_TASK("opt_cache_expiry")
+;;;CREATE INDEX IDX_BETTR_TASK_OPT_CACHE_EXPIRY_MINS ON APP_DQHI_DEV.BETTR_TASK("opt_cache_expiry_mins")
 ;;;CREATE VIEW V_BETTR_TASK (
   BETTR_TASK_KEY
   , BETTR_TASK_GIT_PROJECT
@@ -23,7 +23,7 @@ ALTER TABLE APP_DQHI_DEV.BETTR_TASK
   , BETTR_TASK_SORT
   , OPT_START_DT
   , OPT_END_DT
-  , OPT_CACHE_EXPIRY
+  , OPT_CACHE_EXPIRY_MINS
   , OPT_NUMBER_LIST
   , OPT_CHAR_LIST
   , LAST_TASK_STARTED_DT
@@ -47,7 +47,7 @@ AS (
     , "bettr_task_sort"
     , "opt_start_dt"
     , "opt_end_dt"
-    , "opt_cache_expiry"
+    , "opt_cache_expiry_mins"
     , "opt_number_list"
     , "opt_char_list"
     , "last_task_started_dt"

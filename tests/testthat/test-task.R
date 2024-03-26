@@ -22,7 +22,7 @@ testthat::test_that("successfully add jobs to the bettr host", {
     bettr_task_name = c("task_test_before", "task_test_after"),
     bettr_task_job_comment = c("__TEST__", "__TEST__"),
     bettr_task_job_priority = c(1, 1),
-    opt_cache_expiry = c(120, 120)
+    opt_cache_expiry_mins = c(120, 120)
   ) %>%
     bettr::add_job()
 })

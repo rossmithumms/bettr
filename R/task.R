@@ -19,7 +19,7 @@ get_bettr_task_defaults <- function() {
     bettr_task_sort = as.double(-1),
     opt_start_dt = as.Date(NA),
     opt_end_dt = as.Date(NA),
-    opt_cache_expiry = as.double(-1),
+    opt_cache_expiry_mins = as.double(-1),
     opt_number_list = as.character(NA),
     opt_char_list = as.character(NA),
     last_task_started_dt = as.Date(NA),
