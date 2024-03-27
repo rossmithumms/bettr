@@ -4,9 +4,6 @@
 # Have fun!
 
 bettr::execute_stmts(
-  connection_name = "APP_DQHI_DEV",
+  connection_name = "app_dqhi_dev",
   sql_file = "get_bettr_task_test_before_now"
 )
-
-# TODO something observable in the database with/about that,
-# so we can mark a test passed

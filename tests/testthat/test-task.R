@@ -8,13 +8,11 @@ readRenviron("/workspaces/brain/.Renviron")
 readRenviron("/workspaces/brain/.Renviron.test")
 
 test_cleanup <- function(do_cleanup = TRUE) {
-  if (do_cleanup) {
-    message("!!! cleanup time")
-    bettr::execute_stmts(
-      connection_name = "bettr_host",
-      sql_file = "delete_test_bettr_rows_and_tables"
-    )
-  }
+  bettr::execute_stmts(
+    connection_name = "bettr_host",
+    sql_file = "delete_test_bettr_rows"
+  )
+  bettr::close_db_conn_pool()
 }
 
 withr::defer({
@@ -31,8 +29,7 @@ testthat::test_that("add jobs to the bettr host", {
     opt_cache_expiry_mins = c(120, 120, 120)
   )
 
-  added_tasks %>%
-    bettr::add_job_to_host()
+  added_tasks %>% bettr::add_job_to_host()
 
   bettr_task <- tibble::tibble(
     bettr_task_git_project = "bettr",
@@ -119,11 +116,9 @@ testthat::test_that("runs the tasks with reporting and error handling", {
     sql = "get_failed_bettr_tasks"
   )
 
-  dplyr::glimpse(task_failures)
+  # Clean up so we can test task exhaustion and expiry next
+  test_cleanup()
 })
-
-# TODO verify that the updated state of the tasks in the
-# table reflects reality (completed)
 
 # TODO run the top task in the stack; verify that nothing
 # ran, because there are no more jobs
@@ -131,3 +126,42 @@ testthat::test_that("runs the tasks with reporting and error handling", {
 # TODO write out more logic to handle expiry, then write
 # tests to verify expiry behavior/constant refresh
 # behaves as anticipated
+testthat::test_that("caches exhaust when all are run, and rerun after expiry", {
+  added_tasks <- tibble::tibble(
+    bettr_task_git_project = c("bettr", "bettr"),
+    bettr_task_git_branch = c("feature/task", "feature/task"),
+    bettr_task_name = c("task_test_after", "task_test_delete"),
+    bettr_task_job_comment = c("__TEST__", "__TEST__"),
+    bettr_task_job_priority = c(1, 1),
+    opt_cache_expiry_mins = c(2, -1)
+  )
+
+  added_tasks %>% bettr::add_job_to_host()
+
+  # Run the first task immediately
+  # TODO this consistently returns the error "! cannot open the connection".
+  # It's an RORacle error, usually associated with invalid credentials.
+  # Why is this happening?
+  bettr::run_next_task_in_queue(
+    project = "bettr",
+    branch = "feature/task"
+  )
+
+  # TODO wait 2 minutes
+  message("... sleeping for 2 minutes ...")
+  Sys.sleep(120)
+  message("... naptime's over!")
+
+  # TODO run the next test, which should just be `task_test_after` again
+  task_result <- bettr::run_next_task_in_queue(
+    project = "bettr",
+    branch = "feature/task"
+  )
+
+  print(task_result)
+
+  # TODO if successful, run the last task to delete the data table
+
+  # TODO try running another task (within our 2 minute window).
+  # Nothing should run/task exhaustion
+})
