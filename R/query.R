@@ -230,7 +230,8 @@ get_rows_nobinds <- function(connection_name, sql) {
 #' @param suppress_bind_logging Optionally suppress the logging of bind parameters (defaults to false).
 #' @export
 append_rows <- function(rows, connection_name, table_name, suppress_bind_logging = FALSE) {
-  tryCatch({
+  tryCatch(
+    {
       connection_name <- toupper(connection_name)
       schema <- toupper(get_db_username(connection_name))
       table_name <- toupper(table_name)
@@ -247,7 +248,11 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
       ROracle::dbWriteTable(
         conn = conn,
         name = table_name,
-        value = rows %>% dplyr::mutate(key = as.numeric(NA), audit_insert_dt = as.Date(NA)),
+        value = rows %>%
+          dplyr::mutate(
+            key = as.numeric(NA),
+            audit_insert_dt = as.Date(NA)
+          ),
         schema = schema,
         row.names = FALSE,
         append = TRUE,
@@ -283,7 +288,8 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
 #' @return Nothing
 #' @export
 ensure_table <- function(rows, connection_name, table_name) {
-  tryCatch({
+  tryCatch(
+    {
       connection_name <- toupper(connection_name)
       conn <- get_db_conn(connection_name = connection_name)
       table_name <- toupper(table_name)
@@ -449,7 +455,7 @@ drop_table <- function(connection_name, table_name) {
 #' @return Nothing
 #' @export
 execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
-   suppress_bind_logging = FALSE) {
+  suppress_bind_logging = FALSE) {
   connection_name <- toupper(connection_name)
   conn <- get_db_conn(connection_name = connection_name)
   binds <- binds %>%
@@ -555,17 +561,42 @@ get_url_query <- function(url_query = "") {
 #' 
 #' @return The path to the directory where SQL queries are stored.
 get_sql_dir <- function(connection_name = "") {
-  # TODO when interacting with the bettr host database,
-  # only look for SQL inside the local package
+  sql_base_dir <- Sys.getenv("SQL_DIR")
+  connection_name <- toupper(connection_name)
+
   if (connection_name == "BETTR_HOST") {
-    return(paste(system.file(package = "bettr"), "sql", sep = .Platform$file.sep))
+    sql_base_dir <- system.file(package = "bettr")
+
+    # 2024-03-26: This is insane, but I have to handle it for testing...
+    # If "/inst" is detected, that means we're loading from an installed
+    # package context; "/inst" files are placed in the package root,
+    # so we must strip "/inst" from this directory base.
+    # If "/inst" is not detected, that means we're testing from a local
+    # source folder via devtools::test(), and we must look inside the
+    # "/inst" folder for the SQL we need, thus we add "/inst".
+    # Hooray for R package development.
+    # if (stringr::str_detect(sql_base_dir, "inst")) {
+    #   sql_base_dir <- stringr::str_sub(sql_base_dir, end = -6L)
+    # } else {
+    #   sql_base_dir <- paste(
+    #     sql_base_dir,
+    #     "inst",
+    #     sep = .Platform$file.sep
+    #   )
+    # }
+
+    sql_base_dir <- paste(
+      sql_base_dir,
+      "sql",
+      sep = .Platform$file.sep
+    )
   }
 
-  sql_dir <- Sys.getenv("SQL_DIR")
-
-  if (is.na(sql_dir) || sql_dir == "") {
-    stop("!!! \"sql_dir\" must be defined for bettr to function")
-  }
+  sql_dir <- paste(
+    sql_base_dir,
+    connection_name,
+    sep = .Platform$file.sep
+  )
 
   sql_dir
 }
@@ -578,22 +609,26 @@ get_sql_dir <- function(connection_name = "") {
 #' @param sql The snake_case name of the SQL file without the file extension (such as `get_test_data`).
 #' @param connection_name The snake_case name of the database connection.
 #' @return The SQL statement stored in the file.
-load_sql <- function(sql, connection_name = NA) {
+load_sql <- function(sql, connection_name) {
   if (!is.na(stringr::str_match(sql, "[^-_a-zA-Z0-9]"))) {
-    stop("!!! SQL file name contains illegal characters; stopping")
+    stop("!!! SQL file has illegal characters/matches ^[-_a-zA-Z0-9]; stopping")
   }
 
-  sql_path <- here::here(
-    get_sql_dir(connection_name = toupper(connection_name)),
-    toupper(connection_name),
-    paste(sql,  "sql", sep = ".")
-  ) #nolint
+  sql_path <- paste(
+    get_sql_dir(connection_name = connection_name),
+    paste(
+      sql,
+      "sql",
+      sep = "."
+    ),
+    sep = .Platform$file.sep
+  )
 
-  if (file.exists(sql_path)) {
-    readr::read_file(file = sql_path)
-  } else {
+  if (!file.exists(sql_path)) {
     stop(stringr::str_glue("!!! SQL file not found: {sql_path}"))
   }
+
+  readr::read_file(file = sql_path)
 }
 
 #' Get the Names of Column Binds in a SQL Statement
