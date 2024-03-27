@@ -17,6 +17,10 @@ test_cleanup <- function(do_cleanup = TRUE) {
 
 withr::defer({
   test_cleanup(Sys.getenv("BETTR_TASK_TEST_CLEANUP_AFTER") == 1L)
+  bettr::execute_stmts(
+    connection_name = "app_dqhi_dev",
+    sql_file = "drop_bettr_task_test"
+  )
 })
 
 testthat::test_that("add jobs to the bettr host", {
