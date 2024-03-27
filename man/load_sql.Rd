@@ -4,7 +4,7 @@
 \alias{load_sql}
 \title{Load a SQL Statement from an External File}
 \usage{
-load_sql(sql, connection_name = NA)
+load_sql(sql, connection_name)
 }
 \arguments{
 \item{sql}{The snake_case name of the SQL file without the file extension (such as \code{get_test_data}).}

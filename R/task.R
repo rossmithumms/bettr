@@ -1,12 +1,76 @@
-#' Run Next Task In Bettr Task Queue
-#' 
-#' Checks the next runnable task in the bettr task table
-#' and runs it.  If no eligible task is found, this logic
-#' will return with no side-effects.
-#' NOTE: For complex reasons with our ROracle API implementation,
-#' the order of these columns must match the order they were
-#' in when the table was first created.
-
+#' Defines Default Bettr Task Column Names and Types
+#' @return A tibble with column names and values reflecting
+#' the default values for those columns.  Note that several
+#' are from the environment and are thus contextual defaults.
+#' This object is used when populating new tasks to the host,
+#' and it's assumed that the calls to `bettr::add_job()` will
+#' either configure those explicitly in their bettr_task tibbles,
+#' or the function will be called in an interactive session where
+#' these values are set before the function is called.
+#'
+#' Brief definitions for each column are given below.  Please refer
+#' to function documentation in this file to understand how each
+#' property is interpreted.
+#'
+#' - bettr_task_git_project: Required.  Name of the git repository
+#'   where the task R file is stored. (e.g., `phlebotomy`).
+#' - bettr_task_git_branch: Required.  Name of the git branch where
+#'   the source code is stored.
+#' - bettr_task_git_commit: Optional.  Hash identifier of the git
+#'   commit matching the task R file.  This is intended for auditing
+#'   and validating only.
+#' - bettr_task_job_comment: Optional.  A freetext field containing
+#'   maintenance notes.
+#' - bettr_task_job_id: Metadata.  A unique numeric identifier of
+#'   the job over the tasks.  These functions populate this value
+#'   correctly and automatically; it is required in the database,
+#'   but are never needed from the user when creating jobs.
+#' - bettr_task_job_priority: Required.  A number indicating the
+#'   job priority; the lower the number, the higher the priority.
+#' - bettr_task_name: Required.  The name of the R task file to
+#'   be run to fulfill the task.  Must be located here in the repo:
+#'   <bettr_task_git_project>/src/R/tasks/<bettr_task_name>/<bettr_task_name>.R
+#' - bettr_task_sort: Optional.  The order in which tasks must be
+#'   completed within the job.  If not provided, defaults to the
+#'   order that task rows were added.
+#' - opt_start_dt: Optional.  Parametric "start datetime" for
+#'   task R files.  This bounds the scope of ETL work to a specific
+#'   range of time, subject to the task's interpretation of that.
+#' - opt_end_dt:  Optional . See `opt_start_dt`.
+#' - opt_cache_expiry_mins: Optional.  The cache expiry in minutes.
+#'   Specifically, any task that completes can be give a value >= 1
+#'   here to indicate that the task is only valid for that many
+#'   minutes.  After the cache expires, the task is back in the list.
+#'   Defaults to -1, indicating the task has no expiry time.
+#' - opt_number_list: Optional.  Parametric "number list" for task
+#'   R files.  Stored in the database as a string, and is subject
+#'   to that field's storage limits.
+#' - opt_char_list: Optional.  See `opt_number_list`.
+#' - last_task_started_dt: Metadata.  If this task was ever started,
+#'   this field stores the datetime that happened.
+#' - last_hb_dt: Metadata.  If this task was ever started, this field
+#'   stores the last "heartbeat" datetime.  The heartbeat is sent
+#'   to the host from the task process frequently while the task is
+#'   running.
+#' - last_status: Metadata.  If this task was ever started, this
+#'   stores the last status code of the task, or 0 (Not Started)
+#'   for tasks that were never run.
+#'   The status codes are:
+#'     - 0: Not Started
+#'     - 10: Started
+#'     - 20: Failed
+#'     - 21: Failed, No Retry
+#'     - 30: Succeeded
+#' - last_error: Metadata.  If this task was ever started and it
+#'   generated an error, this field contains a string summary of
+#'   the error.  This field should be set each time the last_status
+#'   is set.
+#' - last_report: Metadata.  If this task was ever started,
+#'   this stores a task-generated, JSON-formatted "report" object.
+#'   The contents of this report are subjective, as tasks can run
+#'   arbitrarily complex code, and is intended to provide values
+#'   that can be supervised by an automated log interpreter.
+#' @export
 get_bettr_task_defaults <- function() {
   tibble::tibble(
     bettr_task_git_project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
@@ -30,27 +94,18 @@ get_bettr_task_defaults <- function() {
   )
 }
 
-# LAST_STATUS Codes
-# 0 = Not Started
-# 10 = Started
-# 20 = Failed
-# 21 = Failed, No Retry
-# 30 = Succeeded
-
 #' Adds A Job to the Bettr Host Task Table
 #' @param bettr_tasks The tasks to be added to the job
-#' table.  Refer to the bettr readme for information
-#' about specifying bettr tasks for this function.
+#' table.  Refer to `?bettr::get_bettr_task_defaults`
+#' for information about bettr_task columns.
 #' @export
-add_job <- function(bettr_tasks) {
+add_job_to_host <- function(bettr_tasks) {
   tryCatch(
     {
       init_bettr_host()
       assert_valid_bettr_tasks(
         bettr_tasks = bettr_tasks,
-        cols = c(
-          "bettr_task_name"
-        )
+        cols = c("bettr_task_name")
       )
 
       # Apply a default sort if necessary
@@ -72,16 +127,7 @@ add_job <- function(bettr_tasks) {
             as.numeric()
         )
 
-      # Apply current project and branch as task target if necessary
-      if (!c("bettr_task_git_project") %in% names(bettr_tasks)) {
-        bettr_tasks <- bettr_tasks %>%
-          dplyr::mutate(
-            bettr_task_git_project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
-            bettr_task_git_branch = Sys.getenv("BETTR_TASK_GIT_BRANCH"),
-            bettr_task_git_commit = Sys.getenv("BETTR_TASK_GIT_COMMIT")
-          )
-      }
-
+      # Apply simple defaults and send them to the host
       bettr_tasks %>%
         apply_bettr_task_defaults() %>%
         append_rows(
@@ -99,25 +145,19 @@ add_job <- function(bettr_tasks) {
   )
 }
 
-#' Initialize the Bettr Host for Tasks
-#' Initializes the task table, if it is missing.
-#' @export
-init_bettr_host <- function() {
-  get_bettr_task_defaults() %>%
-    ensure_table(
-      connection_name = "bettr_host",
-      table_name = "bettr_task"
-    )
-}
-
 #' Run Next Project Task in Bettr Queue
-#' 
+#'
+#' This uses the provided git repository (project) and
+#' branch name to query the host for the next runnable
+#' task.  This is the first row retrieved by this SQL:
+#' `"{system.file(package = 'bettr')}/sql/BETTR_HOST/get_next_bettr_task.sql"`
+#'
 #' @param project String name of the project, used to
 #' filter for eligible tasks.
+#' @param branch String name of the project branch, used
+#' to filter for eligible tasks.
 #' @export
 run_next_task_in_queue <- function(project, branch) {
-  # TODO check BETTR_TASK for the next eligible, runnable
-  # task within the given project
   next_bettr_task <- tibble::tibble(
     bettr_task_git_project = project,
     bettr_task_git_branch = branch
@@ -126,45 +166,42 @@ run_next_task_in_queue <- function(project, branch) {
     sql = "get_next_bettr_task"
   )
 
-  # TODO if no eligible rows are returned, exit
   if (next_bettr_task %>% length() == 0) {
     message("... No next task found, exiting")
     return()
   }
 
-  # TODO if a row is returned, set up a task environment
-  # and run the task
   next_bettr_task %>%
     dplyr::slice_head(n = 1) %>%
+    dplyr::rename_all(snakecase::to_snake_case) %>%
     run_task()
 }
 
 #' Set Up Task Environment and Execute Task
-#' 
+#'
 #' This function sets up an R session, environment
-#' variables, and options to allow the task function
+#' variables, and options to allow the R task file
 #' to execute. This function also sets up heartbeat calls
 #' to the bettr host.
-#' 
-#' @param bettr_task A row from the BETTR_TASK table
-#' in the bettr host Oracle database.
+#'
+#' @param bettr_task A row from the BETTR_TASK table, or
+#' a tibble created to look just like one.
 #' @param task A function to call with the prepared
 #' options and values stored in `bettr_task`.
 run_task <- function(
-  bettr_task = tibble::tibble(),
-  hb_timeout = 1000L
+  bettr_task = NULL,
+  hb_timeout = 10000L
 ) {
 
-  bettr_task <- bettr_task %>%
-    dplyr::slice_head(n = 1)
-
-  bettr_task_key <- bettr_task$bettr_task_key[1]
+  if (is.null(bettr_task) || bettr_task %>% dplyr::count() != 1) {
+    stop("!!! run_task() requires exactly 1 bettr_task")
+  }
 
   rs_task <- init_task_session(bettr_task = bettr_task)
   rs_hb <- callr::r_session$new(wait = TRUE)
 
   on.exit({
-    message("... closing R task and heartbeat sessions")
+    message("... run_task(): closing R task and heartbeat sessions")
     rs_task$close()
     rs_hb$close()
   }, add = TRUE)
@@ -179,7 +216,7 @@ run_task <- function(
               source(task_file)
             },
             error = \(err) {
-              cat(stringr::str_glue("!!! task_file: {task_file}"))
+              cat(stringr::str_glue("!!! run_task() error in task: {task_file}"))
               stop(err)
             }
           )
@@ -188,7 +225,7 @@ run_task <- function(
       state <- "timeout"
       while (state != "ready") {
         rs_hb$run(func = do_heartbeat, args = list(
-          bettr_task_key = bettr_task_key
+          bettr_task_key = bettr_task$bettr_task_key
         ))
         cat(".")
         state <- rs_task$poll_process(timeout = hb_timeout)
@@ -212,12 +249,26 @@ run_task <- function(
   )
 }
 
-#' Set Up Task Environment
+#' Initialize the Bettr Host for Tasks
 #'
-#' This function loads environment variables and prepares
-#' an options object for use by a task function.
+#' Initializes the task table, if it is missing.
+init_bettr_host <- function() {
+  get_bettr_task_defaults() %>%
+    ensure_table(
+      connection_name = "bettr_host",
+      table_name = "bettr_task"
+    )
+}
+
+#' Set Up An R Session to Run a Task
 #'
-init_task_session <- function(bettr_task) {
+#' This uses the library `callr` to create an R session
+#' that loads the current environment variables, sets a
+#' bettr_task object to the global `task_args`, and otherwise
+#' sets up the session for a call to `bettr::run_task()`.
+#' @param bettr_task A bettr_task object.
+#' @return A `callr::r_session` object.
+init_task_session <- function(bettr_task = NULL) {
 
   rs_task <- callr::r_session$new(wait = TRUE)
 
@@ -261,15 +312,8 @@ init_task_session <- function(bettr_task) {
         sep = .Platform$file.sep
       )
 
-      message(stringr::str_glue("... task_dir: {task_dir}"))
-      message(stringr::str_glue("... task_file_path: {task_file_path}"))
-      message(stringr::str_glue("... task_sql_dir: {task_sql_dir}"))
-
       rs_task$run(
         \(task_dir, task_file_path, task_sql_dir, task_args) {
-          # TODO try importing magrittr pipe here...
-          # That would allow task functions to use it,
-          # and not depend on the R >= 4.1 native pipe, |>
           Sys.setenv(
             TASK_DIR = task_dir,
             TASK_FILE = task_file_path,
@@ -298,6 +342,22 @@ init_task_session <- function(bettr_task) {
     finally = {
     }
   )
+}
+
+#' Send a Heartbeat to the Bettr Job Host
+#'
+#' This function updates BETTR_TASK.LAST_HB_DT in the bettr
+#' host Oracle database.
+#' @param bettr_task_key Primary key of the row to update.
+do_heartbeat <- function(bettr_task_key) {
+  tibble::tibble(
+    bettr_task_key = bettr_task_key,
+    last_hb_dt = lubridate::now()
+  ) |>
+    bettr::execute_stmts(
+      connection_name = "bettr_host",
+      sql = "update_bettr_task_last_hb_dt"
+    )
 }
 
 #' Asserts a Bettr Task Has Needed Columns
@@ -346,23 +406,14 @@ assert_valid_bettr_tasks <- function(
   bettr_tasks
 }
 
-#' Send a Heartbeat to the Bettr Job Host
-#' 
-#' This function updates BETTR_TASK.LAST_HB_DT in the bettr
-#' host Oracle database.
-#' @param bettr_task_key Primary key of the row to update.
-do_heartbeat <- function(bettr_task_key) {
-  tibble::tibble(
-    bettr_task_key = bettr_task_key,
-    last_hb_dt = lubridate::now()
-  ) |>
-    bettr::execute_stmts(
-      connection_name = "bettr_host",
-      sql = "update_bettr_task_last_hb_dt"
-    )
-}
-
 #' Apply Default Values to Bettr Task
+#'
+#' Given one or more bettr_tasks, this function takes
+#' default values from `get_bettr_task_defaults()` and
+#' fills them in where NAs are stored and/or the column
+#' is missing.
+#' @return The input bettr_tasks with default values
+#' for all unspecified columns or NA values.
 apply_bettr_task_defaults <- function(bettr_tasks) {
   assert_valid_bettr_tasks(bettr_tasks)
   defaults <- get_bettr_task_defaults()

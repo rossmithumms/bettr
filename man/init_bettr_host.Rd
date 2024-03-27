@@ -2,12 +2,10 @@
 % Please edit documentation in R/task.R
 \name{init_bettr_host}
 \alias{init_bettr_host}
-\title{Initialize the Bettr Host for Tasks
-Initializes the task table, if it is missing.}
+\title{Initialize the Bettr Host for Tasks}
 \usage{
 init_bettr_host()
 }
 \description{
-Initialize the Bettr Host for Tasks
 Initializes the task table, if it is missing.
 }

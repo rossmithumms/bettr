@@ -8,7 +8,7 @@ withr::defer({
   message("!!! testing over; cleanup time")
   bettr::execute_stmts(
     connection_name = "bettr_host",
-    sql_file = "delete_test_bettr_tasks"
+    sql_file = "delete_test_bettr_rows_and_tables"
   )
 })
 
@@ -21,7 +21,7 @@ testthat::test_that("successfully add jobs to the bettr host", {
     bettr_task_job_priority = c(1, 1),
     opt_cache_expiry_mins = c(120, 120)
   ) %>%
-    bettr::add_job()
+    bettr::add_job_to_host()
 })
 
 # TODO run the top task in the stack; verify that it was the

@@ -4,18 +4,18 @@
 \alias{run_task}
 \title{Set Up Task Environment and Execute Task}
 \usage{
-run_task(bettr_task = tibble::tibble(), hb_timeout = 1000L)
+run_task(bettr_task = NULL, hb_timeout = 10000L)
 }
 \arguments{
-\item{bettr_task}{A row from the BETTR_TASK table
-in the bettr host Oracle database.}
+\item{bettr_task}{A row from the BETTR_TASK table, or
+a tibble created to look just like one.}
 
 \item{task}{A function to call with the prepared
 options and values stored in \code{bettr_task}.}
 }
 \description{
 This function sets up an R session, environment
-variables, and options to allow the task function
+variables, and options to allow the R task file
 to execute. This function also sets up heartbeat calls
 to the bettr host.
 }

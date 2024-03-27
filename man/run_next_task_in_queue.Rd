@@ -4,12 +4,18 @@
 \alias{run_next_task_in_queue}
 \title{Run Next Project Task in Bettr Queue}
 \usage{
-run_next_task_in_queue(project)
+run_next_task_in_queue(project, branch)
 }
 \arguments{
 \item{project}{String name of the project, used to
 filter for eligible tasks.}
+
+\item{branch}{String name of the project branch, used
+to filter for eligible tasks.}
 }
 \description{
-Run Next Project Task in Bettr Queue
+This uses the provided git repository (project) and
+branch name to query the host for the next runnable
+task.  This is the first row retrieved by this SQL:
+\code{"{system.file(package = 'bettr')}/sql/BETTR_HOST/get_next_bettr_task.sql"}
 }

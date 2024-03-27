@@ -2,11 +2,19 @@
 % Please edit documentation in R/task.R
 \name{init_task_session}
 \alias{init_task_session}
-\title{Set Up Task Environment}
+\title{Set Up An R Session to Run a Task}
 \usage{
-init_task_session(bettr_task = tibble::tibble(), base_path)
+init_task_session(bettr_task = NULL)
+}
+\arguments{
+\item{bettr_task}{A bettr_task object.}
+}
+\value{
+A \code{callr::r_session} object.
 }
 \description{
-This function loads environment variables and prepares
-an options object for use by a task function.
+This uses the library \code{callr} to create an R session
+that loads the current environment variables, sets a
+bettr_task object to the global \code{task_args}, and otherwise
+sets up the session for a call to \code{bettr::run_task()}.
 }
