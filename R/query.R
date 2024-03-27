@@ -85,7 +85,7 @@ close_db_conn_pool <- function() {
       ROracle::dbDisconnect(bettr_connection_pool[[connection_name]])
     })
 
-  bettr_connection_pool <- list()
+  bettr_connection_pool <<- list()
   message("!!! pool closed")
 }
 
@@ -646,4 +646,3 @@ get_bind_colnames <- function(sql) {
     dplyr::pull(.data$X2) %>%
     toupper
 }
-
