@@ -12,7 +12,7 @@ withr::defer({
   )
 })
 
-testthat::test_that("successfully add jobs to the bettr host", {
+testthat::test_that("add jobs to the bettr host", {
   tibble::tibble(
     bettr_task_git_project = c("bettr", "bettr"),
     bettr_task_git_branch = c("feature/task", "feature/task"),
@@ -22,12 +22,33 @@ testthat::test_that("successfully add jobs to the bettr host", {
     opt_cache_expiry_mins = c(120, 120)
   ) %>%
     bettr::add_job_to_host()
+
+  bettr_task <- tibble::tibble(
+    bettr_task_git_project = "bettr",
+    bettr_task_git_branch = "feature/task"
+  ) %>%
+    bettr::get_rows(
+      connection_name = "bettr_host",
+      sql = "get_next_bettr_task"
+    )
+
+  testthat::expect_equal(
+    bettr_task %>% dplyr::count() %>% as.double(), 2
+  )
+
+  testthat::expect_equal(
+    bettr_task$bettr_task_name[1], "task_test_before"
+  )
+
+  testthat::expect_equal(
+    bettr_task$bettr_task_name[2], "task_test_after"
+  )
 })
 
-# TODO run the top task in the stack; verify that it was the
+# Run the top task in the stack; verify that it was the
 # task `task_test_before` and that 1 row was created in its
 # newly-minted table
-testthat::test_that("successfully runs the next expected task", {
+testthat::test_that("runs the next expected task", {
   bettr::run_next_task_in_queue(
     project = "bettr",
     branch = "feature/task"
