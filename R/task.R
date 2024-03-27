@@ -82,13 +82,8 @@ add_job <- function(bettr_tasks) {
           )
       }
 
-      # DEBUG!
-      message("!!!! Debug!  tasks after applying defaults:")
-      to_add <- bettr_tasks %>%
-        apply_bettr_task_defaults()
-      dplyr::glimpse(to_add)
-
-      to_add %>%
+      bettr_tasks %>%
+        apply_bettr_task_defaults() %>%
         append_rows(
           connection_name = "bettr_host",
           table_name = "bettr_task"
@@ -160,20 +155,16 @@ run_task <- function(
   hb_timeout = 1000L
 ) {
 
-  rs_task <- init_task_session(
-    bettr_task = bettr_task,
-    # I don't feel great about burying this constant,
-    # but there really is no better place for it,
-    # and it should not be configuration-driven
-    base_path = paste(
-      "src",
-      "R",
-      "tasks",
-      sep = .Platform$file.sep
-    )
-  )
+  bettr_task <- bettr_task %>%
+    dplyr::slice_head(n = 1)
+
+  bettr_task_key <- bettr_task$bettr_task_key[1]
+
+  rs_task <- init_task_session(bettr_task = bettr_task)
   rs_hb <- callr::r_session$new(wait = TRUE)
+
   on.exit({
+    message("... closing R task and heartbeat sessions")
     rs_task$close()
     rs_hb$close()
   }, add = TRUE)
@@ -182,12 +173,23 @@ run_task <- function(
     {
       rs_task$call(
         func = \() {
-          source(Sys.getenv("TASK_FILE"))
+          task_file <- Sys.getenv("TASK_FILE")
+          tryCatch(
+            {
+              source(task_file)
+            },
+            error = \(err) {
+              cat(stringr::str_glue("!!! task_file: {task_file}"))
+              stop(err)
+            }
+          )
         }
       )
       state <- "timeout"
       while (state != "ready") {
-        rs_hb$run(func = do_heartbeat)
+        rs_hb$run(func = do_heartbeat, args = list(
+          bettr_task_key = bettr_task_key
+        ))
         cat(".")
         state <- rs_task$poll_process(timeout = hb_timeout)
       }
@@ -196,6 +198,8 @@ run_task <- function(
       # TODO resolve the result of the task based on output.
       # For example, update status in BETTR_TASK.
       print(rs_task$read())
+
+      message("... run_task complete")
     },
     error = \(err) {
       stop(err)
@@ -204,7 +208,6 @@ run_task <- function(
       warning(warn)
     },
     finally = {
-      message("... run_task complete")
     }
   )
 }
@@ -214,27 +217,28 @@ run_task <- function(
 #' This function loads environment variables and prepares
 #' an options object for use by a task function.
 #'
-init_task_session <- function(
-  bettr_task = tibble::tibble(),
-  base_path
-) {
-
-  assert_valid_bettr_tasks(
-    bettr_task,
-    c("bettr_task_name")
-  )
-
-  bettr_task <- bettr_task %>%
-    dplyr::slice_head(n = 1)
-
-  bettr_task_name <- bettr_task %>%
-    dplyr::pull(bettr_task_name)[1] %>%
-    snakecase::to_snake_case()
+init_task_session <- function(bettr_task) {
 
   rs_task <- callr::r_session$new(wait = TRUE)
 
   tryCatch(
     {
+      bettr_task <- bettr_task %>%
+        dplyr::slice_head(n = 1)
+
+      bettr_task_name <- bettr_task$bettr_task_name[1] %>%
+        snakecase::to_snake_case()
+
+      # I don't feel great about burying this constant,
+      # but there really is no better place for it,
+      # and it should not be configuration-driven
+      base_path <- paste(
+        "src",
+        "R",
+        "tasks",
+        sep = .Platform$file.sep
+      )
+
       task_dir <- paste(
         base_path,
         bettr_task_name,
@@ -257,13 +261,12 @@ init_task_session <- function(
         sep = .Platform$file.sep
       )
 
-      message(stringr::str_paste("... task_dir: {task_dir}"))
-      message(stringr::str_paste("... task_file_path: {task_file_path}"))
-      message(stringr::str_paste("... task_sql_dir: {task_sql_dir}"))
+      message(stringr::str_glue("... task_dir: {task_dir}"))
+      message(stringr::str_glue("... task_file_path: {task_file_path}"))
+      message(stringr::str_glue("... task_sql_dir: {task_sql_dir}"))
 
-      rs_task::run(
+      rs_task$run(
         \(task_dir, task_file_path, task_sql_dir, task_args) {
-          readRenviron(".Renviron")
           # TODO try importing magrittr pipe here...
           # That would allow task functions to use it,
           # and not depend on the R >= 4.1 native pipe, |>
@@ -272,8 +275,10 @@ init_task_session <- function(
             TASK_FILE = task_file_path,
             SQL_DIR = task_sql_dir
           )
+
           task_args <<- task_args
         },
+        package = TRUE,
         args = list(
           task_dir = task_dir,
           task_file_path = task_file_path,
@@ -291,7 +296,6 @@ init_task_session <- function(
       warning(warn)
     },
     finally = {
-      message("... init_task_session complete")
     }
   )
 }
