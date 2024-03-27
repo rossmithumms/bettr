@@ -239,6 +239,7 @@ run_task <- function(
       )
     },
     error = \(err) {
+      message("!!! run_task error")
       stop(err)
     },
     warning = \(warn) {

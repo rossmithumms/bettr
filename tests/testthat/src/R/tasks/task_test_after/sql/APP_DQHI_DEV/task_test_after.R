@@ -3,7 +3,7 @@
 # Use the `task_args` object to get query parameters.
 # Have fun!
 
-bettr::execute_stmts(
+bettr::get_rows(
   connection_name = "app_dqhi_dev",
   sql_file = "get_bettr_task_test_before_now"
 )

@@ -153,6 +153,7 @@ testthat::test_that("caches exhaust when all are run, and rerun after expiry", {
   message("... naptime's over!")
 
   # TODO run the next test, which should just be `task_test_after` again
+  # ... Which it is, but it also errors.
   task_result <- bettr::run_next_task_in_queue(
     project = "bettr",
     branch = "feature/task"
