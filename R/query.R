@@ -260,6 +260,7 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
       )
 
       ROracle::dbCommit(conn = conn)
+      message(stringr::str_glue("+++ appended {rows %>% dplyr::count()} rows"))
     },
 
     warning = function(warn) {
