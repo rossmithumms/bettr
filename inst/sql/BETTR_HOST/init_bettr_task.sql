@@ -31,6 +31,7 @@ ALTER TABLE APP_DQHI_DEV.BETTR_TASK
   , LAST_STATUS
   , LAST_ERROR
   , LAST_ROWS_AFFECTED
+  , LAST_REPORT
   , AUDIT_INSERT_DT
 )
 
@@ -55,6 +56,7 @@ AS (
     , "last_status"
     , "last_error"
     , "last_rows_affected"
+    , "last_report"
     , AUDIT_INSERT_DT
   FROM
     APP_DQHI_DEV.BETTR_TASK

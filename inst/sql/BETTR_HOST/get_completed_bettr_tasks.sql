@@ -1,0 +1,8 @@
+SELECT
+  *
+FROM
+  V_BETTR_TASK
+WHERE
+  LAST_STATUS IN (
+    30 -- Completed
+  )

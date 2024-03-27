@@ -4,6 +4,14 @@
 # Have fun!
 
 bettr::execute_stmts(
-  connection_name = "APP_DQHI_DEV",
+  connection_name = "app_dqhi_dev",
   sql_file = "init_bettr_task_test"
+)
+
+# The report
+tibble::tibble(
+  task = "task_test_before",
+  measure_01 = 1,
+  measure_02 = 0.5,
+  mesaure_03 = lubridate::ymd("2024-03-27")
 )
