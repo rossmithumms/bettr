@@ -1,18 +1,15 @@
 # 2024-03-22
 # We're ready to start building out tests for the new task logic.
 
-Sys.setenv(
-  BETTR_TASK_GIT_PROJECT = "bettr",
-  BETTR_TASK_GIT_BRANCH = "feature/task",
-  BETTR_TASK_GIT_COMMIT = "12345"
-)
+# SEE .Renviron.test for BETTR_* env vars used in these tests.
+# Similar ones will need to be populated in Jenkinsfile for prod.
 
 withr::defer({
   message("!!! testing over; cleanup time")
-  # bettr::execute_stmts(
-  #   connection_name = "bettr_host",
-  #   sql_file = "delete_test_bettr_tasks"
-  # )
+  bettr::execute_stmts(
+    connection_name = "bettr_host",
+    sql_file = "delete_test_bettr_tasks"
+  )
 })
 
 testthat::test_that("successfully add jobs to the bettr host", {
