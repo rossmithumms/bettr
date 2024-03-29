@@ -16,10 +16,14 @@ test_cleanup <- function(do_cleanup = TRUE) {
 }
 
 withr::defer({
-  test_cleanup(Sys.getenv("BETTR_TASK_TEST_CLEANUP_AFTER") == 1L)
-  bettr::execute_stmts(
-    connection_name = "app_dqhi_dev",
-    sql_file = "drop_bettr_task_test"
+  try(
+    {
+      test_cleanup(Sys.getenv("BETTR_TASK_TEST_CLEANUP_AFTER") == 1L)
+      bettr::execute_stmts(
+        connection_name = "app_dqhi_dev",
+        sql_file = "drop_bettr_task_test"
+      )
+    }
   )
 })
 
@@ -29,8 +33,7 @@ testthat::test_that("add jobs to the bettr host", {
     bettr_task_git_branch = c("feature/task", "feature/task", "feature/task"),
     bettr_task_name = c("task_test_before", "task_test_error_during", "task_test_after"),
     bettr_task_job_comment = c("__TEST__", "__TEST__", "__TEST__"),
-    bettr_task_job_priority = c(1, 1, 1),
-    opt_cache_expiry_mins = c(120, 120, 120)
+    bettr_task_job_priority = c(1, 1, 1)
   )
 
   added_tasks %>% bettr::add_job_to_host()
@@ -71,6 +74,9 @@ testthat::test_that("runs the tasks with reporting and error handling", {
     branch = "feature/task"
   )
 
+  # The command that just ran must return an rs_result (with useful
+  # result and result$value properties) and a bettr_task (the task
+  # input values, with updated last_state and last_error metadata)
   testthat::expect_equal(
     c("rs_result", "bettr_task"),
     names(task_result)
@@ -124,12 +130,6 @@ testthat::test_that("runs the tasks with reporting and error handling", {
   test_cleanup()
 })
 
-# TODO run the top task in the stack; verify that nothing
-# ran, because there are no more jobs
-
-# TODO write out more logic to handle expiry, then write
-# tests to verify expiry behavior/constant refresh
-# behaves as anticipated
 testthat::test_that("caches exhaust when all are run, and rerun after expiry", {
   added_tasks <- tibble::tibble(
     bettr_task_git_project = c("bettr", "bettr"),
@@ -142,31 +142,46 @@ testthat::test_that("caches exhaust when all are run, and rerun after expiry", {
 
   added_tasks %>% bettr::add_job_to_host()
 
-  # Run the first task immediately
-  # TODO this consistently returns the error "! cannot open the connection".
-  # It's an RORacle error, usually associated with invalid credentials.
-  # Why is this happening?
-  bettr::run_next_task_in_queue(
+  # Run the 1 task immediately
+  task_result_1 <- bettr::run_next_task_in_queue(
     project = "bettr",
     branch = "feature/task"
   )
 
-  # TODO wait 2 minutes
-  message("... sleeping for 2 minutes ...")
-  Sys.sleep(120)
+  # Wait out the cache expiry on the task
+  message("... sleeping for 3 minutes ...")
+  Sys.sleep(180)
   message("... naptime's over!")
 
-  # TODO run the next test, which should just be `task_test_after` again
-  # ... Which it is, but it also errors.
-  task_result <- bettr::run_next_task_in_queue(
+  # Run the next test, which should just be `task_test_after` again
+  task_result_2 <- bettr::run_next_task_in_queue(
     project = "bettr",
     branch = "feature/task"
   )
 
-  print(task_result)
+  # Make sure both executions yield the same result
+  testthat::expect_equal(
+    task_result_1$result$value, task_result_2$result$value
+  )
 
-  # TODO if successful, run the last task to delete the data table
+  # Now run the final task in the queue, task_test_delete
+  task_result_3 <- bettr::run_next_task_in_queue(
+    project = "bettr",
+    branch = "feature/task"
+  )
 
-  # TODO try running another task (within our 2 minute window).
-  # Nothing should run/task exhaustion
+  # It should just return TRUE
+  testthat::expect_equal(
+    task_result_3$rs_result$result$value,
+    list(TRUE)
+  )
+
+  # Last, try to run another task before caches expire.
+  # Nothing should run/task exhaustion.
+  task_result_4 <- bettr::run_next_task_in_queue(
+    project = "bettr",
+    branch = "feature/task"
+  )
+
+  testthat::expect_null(task_result_4)
 })

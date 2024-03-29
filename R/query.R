@@ -86,7 +86,7 @@ close_db_conn_pool <- function() {
     })
 
   bettr_connection_pool <<- list()
-  message("!!! pool closed")
+  message("--- pool closed")
 }
 
 #' Get Rows from a Database
@@ -129,7 +129,7 @@ get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE)
 }
 
 #' Get Rows from a Database With Bind Parameters
-#' 
+#'
 #' Calls the SELECT query while passing bind parameters.
 #' Multiple rows of bind parameters are queried in series,
 #' then bound and packaged as a tibble for returning.
@@ -160,7 +160,7 @@ get_rows_binds <- function(binds, connection_name, sql, suppress_bind_logging = 
           message("... fetching")
           data <- ROracle::fetch(rs)
           ROracle::dbClearResult(rs)
-          message(stringr::str_glue("... returning {dplyr::count(data)} rows"))
+          message(stringr::str_glue("--- returning {dplyr::count(data)} rows"))
           data
         }) %>%
           data.table::rbindlist() %>%
@@ -198,7 +198,7 @@ get_rows_nobinds <- function(connection_name, sql) {
       message("... fetching")
       data <- ROracle::fetch(rs)
       ROracle::dbClearResult(rs)
-      message(stringr::str_glue("... returning {dplyr::count(data)} rows"))
+      message(stringr::str_glue("--- returning {dplyr::count(data)} rows"))
       data %>%
         tibble::as_tibble(.name_repair = snakecase::to_snake_case)
     },
@@ -335,7 +335,7 @@ ensure_table <- function(rows, connection_name, table_name) {
         ROracle::dbCommit(conn = conn)
         message(stringr::str_glue("+++ initialized table: {table_name}"))
       } else {
-        message(stringr::str_glue("+++ table already exists: {table_name}"))
+        message(stringr::str_glue("--- table already exists: {table_name}"))
       }
 
       TRUE

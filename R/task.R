@@ -167,7 +167,7 @@ run_next_task_in_queue <- function(project, branch) {
     sql = "get_next_bettr_task"
   )
 
-  if (next_bettr_task %>% length() == 0) {
+  if (next_bettr_task %>% dplyr::count() == 0) {
     message("... No next task found, exiting")
     return()
   }
@@ -214,10 +214,13 @@ run_task <- function(
           task_file <- Sys.getenv("TASK_FILE")
           tryCatch(
             {
+              # TODO I think the error is here, somehow.
               source(task_file)
             },
             error = \(err) {
-              cat(stringr::str_glue("!!! run_task() error in task: {task_file}"))
+              message(stringr::str_glue("!!! run_task() error in task: {task_file}"))
+              message(stringr::str_glue("!!! Is the task R file in the correct folder?"))
+              message(stringr::str_glue("!!! <project_root>/src/R/tasks/<bettr_task_name>/<bettr_task_name>.R"))
               stop(err)
             }
           )
