@@ -4,7 +4,10 @@
 \alias{run_next_task_in_queue}
 \title{Run Next Project Task in Bettr Queue}
 \usage{
-run_next_task_in_queue(project, branch)
+run_next_task_in_queue(
+  project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
+  branch = Sys.getenv("BETTR_TASK_GIT_BRANCH")
+)
 }
 \arguments{
 \item{project}{String name of the project, used to

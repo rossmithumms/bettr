@@ -51,8 +51,8 @@ here to indicate that the task is only valid for that many
 minutes.  After the cache expires, the task is back in the list.
 Defaults to -1, indicating the task has no expiry time.
 \item opt_number_list: Optional.  Parametric "number list" for task
-R files.  Stored in the database as a string, and is subject
-to that field's storage limits.
+R files.  Stored in the database as a comma-separated string,
+and is subject to that field's storage limits (4000 characters).
 \item opt_char_list: Optional.  See \code{opt_number_list}.
 \item last_task_started_dt: Metadata.  If this task was ever started,
 this field stores the datetime that happened.

@@ -43,8 +43,8 @@
 #'   minutes.  After the cache expires, the task is back in the list.
 #'   Defaults to -1, indicating the task has no expiry time.
 #' - opt_number_list: Optional.  Parametric "number list" for task
-#'   R files.  Stored in the database as a string, and is subject
-#'   to that field's storage limits.
+#'   R files.  Stored in the database as a comma-separated string,
+#'   and is subject to that field's storage limits (4000 characters).
 #' - opt_char_list: Optional.  See `opt_number_list`.
 #' - last_task_started_dt: Metadata.  If this task was ever started,
 #'   this field stores the datetime that happened.
@@ -158,7 +158,9 @@ add_job_to_host <- function(bettr_tasks) {
 #' @param branch String name of the project branch, used
 #' to filter for eligible tasks.
 #' @export
-run_next_task_in_queue <- function(project, branch) {
+run_next_task_in_queue <- function(
+  project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
+  branch = Sys.getenv("BETTR_TASK_GIT_BRANCH")) {
   next_bettr_task <- tibble::tibble(
     bettr_task_git_project = project,
     bettr_task_git_branch = branch

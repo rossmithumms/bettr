@@ -4,10 +4,12 @@
 \alias{do_heartbeat}
 \title{Send a Heartbeat to the Bettr Job Host}
 \usage{
-do_heartbeat(bettr_task_key)
+do_heartbeat(bettr_task_key, last_status = 10, last_error = "")
 }
 \arguments{
-\item{bettr_task_key}{Primary key of the row to update.}
+\item{bettr_task_key}{Required. Primary key of the row to update.}
+
+\item{last_status}{Optional. Status code to send. Defaults to 10.}
 }
 \description{
 This function updates BETTR_TASK.LAST_HB_DT in the bettr
