@@ -1,6 +1,6 @@
 Package: bettr
 Title: Simpler Tidy Oracle Queries and R Shiny Helpers
-Version: 1.0.1.2
+Version: 1.0.1.3
 Authors@R: 
     person("Ross", "Smith", , "rossmith@med.umich.edu", role = c("aut", "cre"),
            comment = c(ORCID = "YOUR-ORCID-ID"))
