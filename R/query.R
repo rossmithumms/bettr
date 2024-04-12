@@ -598,7 +598,7 @@ generate_init_sql <- function(rows, table_name, connection_name, idx_names = c()
       col_names,
       collapse = ",\n  "
     ),
-    ", AUDIT_INSERT_DT\n) AS (\n  SELECT\n    KEY,\n    \"",
+    ",\n  AUDIT_INSERT_DT\n) AS (\n  SELECT\n    KEY,\n    \"",
     paste0(
       tolower(col_names),
       collapse = "\",\n    \""
