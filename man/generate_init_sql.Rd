@@ -8,7 +8,8 @@ generate_init_sql(
   rows,
   table_name,
   connection_name,
-  idx_names = c(),
+  index_id_columns = TRUE,
+  index_columns = c(),
   view_grants = c()
 )
 }
@@ -20,9 +21,14 @@ to be stored in the new table and presented in a new view.}
 
 \item{connection_name}{The name of the database connection (schema user).}
 
-\item{idx_names}{The names of any columns to be indexed.  Defaults to none.}
+\item{index_id_columns}{If TRUE, columns that end in \verb{_id} will automatically
+have indexes created on them.  Defaults to TRUE.}
 
-\item{view_grants}{The names of database roles to grant SELECT permissions.}
+\item{index_columns}{A vector of column names to be indexed.  If parameter
+\code{index_id_columns} = TRUE, this will supplement those columns.}
+
+\item{view_grants}{The names of database roles to grant SELECT permissions.
+Defaults to none.}
 }
 \value{
 Nothing.  This function is called for its side effect of writing an

@@ -468,6 +468,7 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
     ) %>%
     stringr::str_replace_all(pattern = "[ \t\r\n]+", replacement = " ") %>%
     stringr::str_split(pattern = ";;;")
+  stmts <- stmts[nzchar(stmts)]
   row_bind_ct <- dplyr::count(binds) %>% dplyr::pull()
 
   # Iterate over statements and excute them
@@ -542,32 +543,42 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
 #' to be stored in the new table and presented in a new view.
 #' @param table_name The name of the table.
 #' @param connection_name The name of the database connection (schema user).
-#' @param idx_names The names of any columns to be indexed.  Defaults to none.
+#' @param index_id_columns If TRUE, columns that end in `_id` will automatically
+#' have indexes created on them.  Defaults to TRUE.
+#' @param index_columns A vector of column names to be indexed.  If parameter
+#' `index_id_columns` = TRUE, this will supplement those columns.
 #' @param view_grants The names of database roles to grant SELECT permissions.
+#' Defaults to none.
 #' @return Nothing.  This function is called for its side effect of writing an
 #' initialization SQL file to the hard disk under the path given at the SQL_DIR
 #' environment variable.  Defaults to none.
 #' @export
-generate_init_sql <- function(rows, table_name, connection_name, idx_names = c(), view_grants = c()) {
+generate_init_sql <- function(
+  rows,
+  table_name,
+  connection_name,
+  index_id_columns = TRUE,
+  index_columns = c(),
+  view_grants = c()) {
+
   table_name <- toupper(table_name)
   connection_name <- toupper(connection_name)
   col_names <- rows |> names() |> toupper()
-  idx_names <- idx_names |> toupper()
-  idx_missing <- setdiff(idx_names, col_names)
-  sql_dir <- Sys.getenv("SQL_DIR")
-  if (length(view_grants) == 0) {
-    view_grants <- c(
-      "RPT_PATH",
-      "RPT_DQHI",
-      "RPT_DQHI_DEV"
+  index_columns <- index_columns |> toupper()
+  if (index_id_columns) {
+    index_columns <- vctrs::vec_c(
+      index_columns,
+      col_names[stringr::str_detect(col_names, "_ID$")]
     )
   }
-  if (length(idx_missing) > 0) {
+  index_missing <- setdiff(index_columns, col_names)
+  sql_dir <- Sys.getenv("SQL_DIR")
+  if (length(index_missing) > 0) {
     stop(
       stringr::str_glue(
         paste(
           "!!! generate_init_sql could not index missing columns: ",
-          paste0(idx_missing, collapse = ", "),
+          paste0(index_missing, collapse = ", "),
           sep = ""
         )
       )
@@ -581,11 +592,11 @@ generate_init_sql <- function(rows, table_name, connection_name, idx_names = c()
       sep = ""
     )
   )
-  idx_stmts <- idx_names |>
+  index_stmts <- index_columns |>
     (\(name) {
       stringr::str_glue(
         paste0(
-          "CREATE INDEX IDX_{table_name}_{name} ON ",
+          "CREATE INDEX index_{table_name}_{name} ON ",
           "{connection_name}.{table_name}(\"{tolower(name)}\")",
           collapse = ";;;\n"
         )
@@ -615,7 +626,7 @@ generate_init_sql <- function(rows, table_name, connection_name, idx_names = c()
     paste0(collapse = ";;;\n")
   init_sql <- paste(
     alter_table_stmt,
-    idx_stmts,
+    index_stmts,
     view_stmt,
     view_grant_stmts,
     sep = ";;;\n"
