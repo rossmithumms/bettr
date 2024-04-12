@@ -7,7 +7,7 @@
 generate_init_sql(
   rows,
   table_name,
-  schema_name,
+  connection_name,
   idx_names = c(),
   view_grants = c()
 )
@@ -18,7 +18,7 @@ to be stored in the new table and presented in a new view.}
 
 \item{table_name}{The name of the table.}
 
-\item{schema_name}{The name of the schema (the database user).}
+\item{connection_name}{The name of the database connection (schema user).}
 
 \item{idx_names}{The names of any columns to be indexed.  Defaults to none.}
 

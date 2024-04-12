@@ -541,20 +541,27 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
 #' @param rows Rows of data from an extract that are representative of the data
 #' to be stored in the new table and presented in a new view.
 #' @param table_name The name of the table.
-#' @param schema_name The name of the schema (the database user).
+#' @param connection_name The name of the database connection (schema user).
 #' @param idx_names The names of any columns to be indexed.  Defaults to none.
 #' @param view_grants The names of database roles to grant SELECT permissions.
 #' @return Nothing.  This function is called for its side effect of writing an
 #' initialization SQL file to the hard disk under the path given at the SQL_DIR
 #' environment variable.  Defaults to none.
 #' @export
-generate_init_sql <- function(rows, table_name, schema_name, idx_names = c(), view_grants = c()) {
+generate_init_sql <- function(rows, table_name, connection_name, idx_names = c(), view_grants = c()) {
   table_name <- toupper(table_name)
   schema_name <- toupper(schema_name)
   col_names <- rows |> names() |> toupper()
   idx_names <- idx_names |> toupper()
   idx_missing <- setdiff(idx_names, col_names)
   sql_dir <- Sys.getenv("SQL_DIR")
+  if (length(view_grants) == 0) {
+    view_grants <- c(
+      "RPT_PATH",
+      "RPT_DQHI",
+      "RPT_DQHI_DEV"
+    )
+  }
   if (length(idx_missing) > 0) {
     stop(
       stringr::str_glue(
