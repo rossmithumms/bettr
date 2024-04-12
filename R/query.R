@@ -467,12 +467,19 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
       connection_name = connection_name
     ) %>%
     stringr::str_replace_all(pattern = "[ \t\r\n]+", replacement = " ") %>%
-    stringr::str_split(pattern = ";;;")
-  stmts <- stmts[!stringr::str_detect(stmts, "^ *$")]
+    stringr::str_split(pattern = ";;;") %>%
+    tibble::tibble(
+      stmt = .[[1]]
+    ) |>
+    dplyr::filter(
+      !stringr::str_detect(stmt, "^ *$")
+    ) |>
+    dplyr::pull() |>
+    as.list()
   row_bind_ct <- dplyr::count(binds) %>% dplyr::pull()
 
   # Iterate over statements and excute them
-  stmts[[1]] %>%
+  stmts %>%
     lapply(function(stmt) {
       print(stringr::str_glue("... executing: {stmt}"))
       # If there are 0 or 1 rows of bind parameters, don't iterate over them;
