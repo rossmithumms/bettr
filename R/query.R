@@ -468,7 +468,7 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
     ) %>%
     stringr::str_replace_all(pattern = "[ \t\r\n]+", replacement = " ") %>%
     stringr::str_split(pattern = ";;;")
-  stmts <- stmts[nzchar(stmts)]
+  stmts <- stmts[!stringr::str_detect(stmts, "^ *$")]
   row_bind_ct <- dplyr::count(binds) %>% dplyr::pull()
 
   # Iterate over statements and excute them
