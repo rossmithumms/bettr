@@ -4,14 +4,17 @@
 \alias{do_heartbeat}
 \title{Send a Heartbeat to the Bettr Job Host}
 \usage{
-do_heartbeat(bettr_task_key, last_status = 10, last_error = "")
+do_heartbeat(last_status = 10, last_error = "")
 }
 \arguments{
-\item{bettr_task_key}{Required. Primary key of the row to update.}
-
 \item{last_status}{Optional. Status code to send. Defaults to 10.}
+
+\item{last_error}{Optional.  The string returned by the last error
+returned by the task's \code{callr} R subprocess.  Defaults to empty.}
 }
 \description{
 This function updates BETTR_TASK.LAST_HB_DT in the bettr
-host Oracle database.
+host Oracle database.  Note: this function is relies on static
+values in a global list object called \code{hb_args}, which must be set
+before this function is called.
 }

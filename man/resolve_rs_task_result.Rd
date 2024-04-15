@@ -4,11 +4,17 @@
 \alias{resolve_rs_task_result}
 \title{Resolve An Ended Task Session with the Bettr Host}
 \usage{
-resolve_rs_task_result(rs_task, bettr_task)
+resolve_rs_task_result(rs_task, rs_hb, bettr_task)
 }
 \arguments{
-\item{rs_task}{A \code{callr::r_session} object where
+\item{rs_task}{Required.  A \code{callr::r_session} object where
 our task R file has just stopped execution.}
+
+\item{rs_hb}{Required.  A \code{callr::r_session} object for the
+heartbeat.}
+
+\item{bettr_task}{Required.  A bettr task object.  See the function
+\code{get_bettr_task_defaults()} for details.}
 }
 \description{
 Resolve An Ended Task Session with the Bettr Host

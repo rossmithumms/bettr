@@ -4,14 +4,14 @@
 \alias{run_task}
 \title{Set Up Task Environment and Execute Task}
 \usage{
-run_task(bettr_task = NULL, hb_timeout = 10000L)
+run_task(bettr_task, hb_timeout = 10000L)
 }
 \arguments{
-\item{bettr_task}{A row from the BETTR_TASK table, or
+\item{bettr_task}{Required.  A row from the BETTR_TASK table, or
 a tibble created to look just like one.}
 
-\item{task}{A function to call with the prepared
-options and values stored in \code{bettr_task}.}
+\item{hb_timeout}{Optional.  The time in milliseconds to wait
+between calls to the heartbeat function.  Defaults to 10000L (10s).}
 }
 \description{
 This function sets up an R session, environment

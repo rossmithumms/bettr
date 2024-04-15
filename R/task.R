@@ -187,12 +187,12 @@ run_next_task_in_queue <- function(
 #' to execute. This function also sets up heartbeat calls
 #' to the bettr host.
 #'
-#' @param bettr_task A row from the BETTR_TASK table, or
+#' @param bettr_task Required.  A row from the BETTR_TASK table, or
 #' a tibble created to look just like one.
-#' @param task A function to call with the prepared
-#' options and values stored in `bettr_task`.
+#' @param hb_timeout Optional.  The time in milliseconds to wait
+#' between calls to the heartbeat function.  Defaults to 10000L (10s).
 run_task <- function(
-  bettr_task = NULL,
+  bettr_task,
   hb_timeout = 10000L
 ) {
 
@@ -216,23 +216,43 @@ run_task <- function(
           task_file <- Sys.getenv("TASK_FILE")
           tryCatch(
             {
-              # TODO I think the error is here, somehow.
+              if (!file.exists(task_file)) {
+                stop(
+                  stringr::str_glue(
+                    paste(
+                      "!!! run_task() error in task: {task_file}.  ",
+                      "Is the task R file in the correct folder?  ",
+                      "<project_root>/src/R/tasks/<bettr_task_name>/<bettr_task_name>.R"
+                    )
+                  )
+                )
+              }
               source(task_file)
             },
             error = \(err) {
-              message(stringr::str_glue("!!! run_task() error in task: {task_file}"))
-              message(stringr::str_glue("!!! Is the task R file in the correct folder?"))
-              message(stringr::str_glue("!!! <project_root>/src/R/tasks/<bettr_task_name>/<bettr_task_name>.R"))
               stop(err)
             }
           )
         }
       )
       state <- "timeout"
+      # TODO prepare the heartbeat session with the global vars that
+      # do_heartbeat will need for execution
+      rs_hb$run(func = \(bettr_task_key, last_task_started_dt, bettr_task_git_commit) {
+          hb_args <<- list(
+            bettr_task_key = bettr_task_key,
+            last_task_started_dt = last_task_started_dt,
+            bettr_task_git_commit = bettr_task_git_commit
+          )
+        },
+        args = list(
+          bettr_task_key = bettr_task$bettr_task_key,
+          last_task_started_dt = lubridate::now(),
+          bettr_task_git_commit = Sys.getenv("BETTR_TASK_GIT_COMMIT")
+        )
+      )
       while (state != "ready") {
-        rs_hb$run(func = do_heartbeat, args = list(
-          bettr_task_key = bettr_task$bettr_task_key
-        ))
+        rs_hb$run(func = do_heartbeat, args = list())
         cat(".")
         state <- rs_task$poll_process(timeout = hb_timeout)
       }
@@ -240,6 +260,7 @@ run_task <- function(
 
       resolve_rs_task_result(
         rs_task = rs_task,
+        rs_hb = rs_hb,
         bettr_task = bettr_task
       )
     },
@@ -258,12 +279,16 @@ run_task <- function(
 #' Send a Heartbeat to the Bettr Job Host
 #'
 #' This function updates BETTR_TASK.LAST_HB_DT in the bettr
-#' host Oracle database.
-#' @param bettr_task_key Required. Primary key of the row to update.
+#' host Oracle database.  Note: this function is relies on static
+#' values in a global list object called `hb_args`, which must be set
+#' before this function is called.
 #' @param last_status Optional. Status code to send. Defaults to 10.
-do_heartbeat <- function(bettr_task_key, last_status = 10, last_error = "") {
+#' @param last_error Optional.  The string returned by the last error
+#' returned by the task's `callr` R subprocess.  Defaults to empty.
+do_heartbeat <- function(last_status = 10, last_error = "") {
   tibble::tibble(
-    bettr_task_key = bettr_task_key,
+    bettr_task_key = hb_args$bettr_task_key,
+    last_task_started_dt = hb_args$last_task_started_dt,
     last_status = last_status,
     last_error = last_error,
     last_hb_dt = lubridate::now()
@@ -276,9 +301,13 @@ do_heartbeat <- function(bettr_task_key, last_status = 10, last_error = "") {
 
 #' Resolve An Ended Task Session with the Bettr Host
 #'
-#' @param rs_task A `callr::r_session` object where
+#' @param rs_task Required.  A `callr::r_session` object where
 #' our task R file has just stopped execution.
-resolve_rs_task_result <- function(rs_task, bettr_task) {
+#' @param rs_hb Required.  A `callr::r_session` object for the
+#' heartbeat.
+#' @param bettr_task Required.  A bettr task object.  See the function
+#' `get_bettr_task_defaults()` for details.
+resolve_rs_task_result <- function(rs_task, rs_hb, bettr_task) {
 
   tryCatch(
     {
@@ -294,11 +323,10 @@ resolve_rs_task_result <- function(rs_task, bettr_task) {
           stringr::str_sub(start = 1L, end = 3999L)
       }
 
-      do_heartbeat(
-        bettr_task_key = bettr_task$bettr_task_key,
+      rs_hb$run(func = do_heartbeat, args = list(
         last_status = last_status,
         last_error = last_error
-      )
+      ))
 
       submit_task_report(
         bettr_task_key = bettr_task$bettr_task_key,
@@ -380,9 +408,9 @@ init_bettr_host <- function() {
 #' that loads the current environment variables, sets a
 #' bettr_task object to the global `task_args`, and otherwise
 #' sets up the session for a call to `bettr::run_task()`.
-#' @param bettr_task A bettr_task object.
+#' @param bettr_task Required.  A bettr_task object.
 #' @return A `callr::r_session` object.
-init_task_session <- function(bettr_task = NULL) {
+init_task_session <- function(bettr_task) {
 
   rs_task <- callr::r_session$new(wait = TRUE)
 

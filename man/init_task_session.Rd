@@ -4,10 +4,10 @@
 \alias{init_task_session}
 \title{Set Up An R Session to Run a Task}
 \usage{
-init_task_session(bettr_task = NULL)
+init_task_session(bettr_task)
 }
 \arguments{
-\item{bettr_task}{A bettr_task object.}
+\item{bettr_task}{Required.  A bettr_task object.}
 }
 \value{
 A \code{callr::r_session} object.
