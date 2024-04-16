@@ -289,6 +289,7 @@ do_heartbeat <- function(last_status = 10, last_error = "") {
   tibble::tibble(
     bettr_task_key = hb_args$bettr_task_key,
     last_task_started_dt = hb_args$last_task_started_dt,
+    bettr_task_git_commit = hb_args$bettr_task_git_commit,
     last_status = last_status,
     last_error = last_error,
     last_hb_dt = lubridate::now()
