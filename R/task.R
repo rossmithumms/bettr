@@ -151,6 +151,9 @@ add_job_to_host <- function(bettr_tasks) {
 #' This uses the provided git repository (project) and
 #' branch name to query the host for the next runnable
 #' job, being a whole group of tasks.
+#' Note that this will attempt to rerun, in order, all
+#' the tasks under the job, not just those expired,
+#' errored, or not started.
 #' This is the first job retrieved by this SQL:
 #' `"{system.file(package = 'bettr')}/sql/BETTR_HOST/get_next_bettr_job.sql"`
 #' 
@@ -177,7 +180,7 @@ run_next_job_in_queue <- function(
 
   for (i in seq_along(next_bettr_job)) {
     next_bettr_job %>%
-      dplyr::slice_head(n = i) %>%
+      dplyr::slice(i:i) %>%
       dplyr::rename_all(snakecase::to_snake_case) %>%
       run_task()
   }

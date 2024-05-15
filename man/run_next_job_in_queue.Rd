@@ -20,6 +20,9 @@ to filter for eligible jobs.}
 This uses the provided git repository (project) and
 branch name to query the host for the next runnable
 job, being a whole group of tasks.
+Note that this will attempt to rerun, in order, all
+the tasks under the job, not just those expired,
+errored, or not started.
 This is the first job retrieved by this SQL:
 \code{"{system.file(package = 'bettr')}/sql/BETTR_HOST/get_next_bettr_job.sql"}
 }
