@@ -36,7 +36,7 @@ testthat::test_that("add jobs to the bettr host", {
     bettr_task_job_priority = c(1, 1, 1)
   )
 
-  added_tasks %>% bettr::add_job_to_host()
+  added_tasks |> bettr::add_job_to_host()
 
   bettr_task <- tibble::tibble(
     bettr_task_git_project = "bettr",
@@ -61,6 +61,33 @@ testthat::test_that("add jobs to the bettr host", {
 
   testthat::expect_equal(
     bettr_task$bettr_task_name[3], "task_test_after"
+  )
+
+  # Test again, this time with get_next_bettr_job.
+  # The result should be the same.
+  bettr_job <- tibble::tibble(
+    bettr_task_git_project = "bettr",
+    bettr_task_git_branch = "feature/task"
+  ) %>%
+    bettr::get_rows(
+      connection_name = "bettr_host",
+      sql = "get_next_bettr_job"
+    )
+
+  testthat::expect_equal(
+    bettr_job %>% dplyr::count() %>% as.double(), 3
+  )
+
+  testthat::expect_equal(
+    bettr_job$bettr_task_name[1], "task_test_before"
+  )
+
+  testthat::expect_equal(
+    bettr_job$bettr_task_name[2], "task_test_error_during"
+  )
+
+  testthat::expect_equal(
+    bettr_job$bettr_task_name[3], "task_test_after"
   )
 })
 

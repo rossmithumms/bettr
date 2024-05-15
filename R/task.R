@@ -146,6 +146,43 @@ add_job_to_host <- function(bettr_tasks) {
   )
 }
 
+#' Run Next Project Job in Better Queue
+#' 
+#' This uses the provided git repository (project) and
+#' branch name to query the host for the next runnable
+#' job, being a whole group of tasks.
+#' This is the first job retrieved by this SQL:
+#' `"{system.file(package = 'bettr')}/sql/BETTR_HOST/get_next_bettr_job.sql"`
+#' 
+#' @param project String name of the project, used to
+#' filter for eligible jobs.
+#' @param branch String name of the project branch, used
+#' to filter for eligible jobs.
+#' @export
+run_next_job_in_queue <- function(
+  project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
+  branch = Sys.getenv("BETTR_TASK_GIT_BRANCH")) {
+  next_bettr_job <- tibble::tibble(
+    bettr_task_git_project = project,
+    bettr_task_git_branch = branch
+  ) %>% get_rows(
+    connection_name = "bettr_host",
+    sql = "get_next_bettr_job"
+  )
+
+  if (next_bettr_job %>% dplyr::count() == 0) {
+    message("... No next job found, exiting")
+    return()
+  }
+
+  for (i in seq_along(next_bettr_job)) {
+    next_bettr_job %>%
+      dplyr::slice_head(n = i) %>%
+      dplyr::rename_all(snakecase::to_snake_case) %>%
+      run_task()
+  }
+}
+
 #' Run Next Project Task in Bettr Queue
 #'
 #' This uses the provided git repository (project) and
