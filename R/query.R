@@ -603,7 +603,7 @@ generate_init_sql <- function(
     (\(name) {
       stringr::str_glue(
         paste0(
-          "CREATE INDEX index_{table_name}_{name} ON ",
+          "CREATE INDEX IDX_{table_name}_{name} ON ",
           "{connection_name}.{table_name}(\"{tolower(name)}\")",
           collapse = ";;;\n"
         )
