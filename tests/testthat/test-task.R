@@ -27,6 +27,22 @@ withr::defer({
   )
 })
 
+testthat::test_that("run next job runs all tasks in next job successfully", {
+  added_tasks <- tibble::tibble(
+    bettr_task_git_project = c("bettr", "bettr", "bettr"),
+    bettr_task_git_branch = c("feature/task", "feature/task", "feature/task"),
+    bettr_task_name = c("task_test_before", "task_test_error_during", "task_test_after"),
+    bettr_task_job_comment = c("__TEST__", "__TEST__", "__TEST__"),
+    bettr_task_job_priority = c(1, 1, 1)
+  )
+
+  added_tasks |> bettr::add_job_to_host()
+
+  bettr::run_next_job_in_queue()
+
+  test_cleanup()
+})
+
 testthat::test_that("add jobs to the bettr host", {
   added_tasks <- tibble::tibble(
     bettr_task_git_project = c("bettr", "bettr", "bettr"),

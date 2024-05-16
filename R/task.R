@@ -178,8 +178,8 @@ run_next_job_in_queue <- function(
     return()
   }
 
-  for (i in seq_along(next_bettr_job)) {
-    message(stringr::str_glue("... starting job {i} ..."))
+  for (i in seq_len(nrow(next_bettr_job))) {
+    message(stringr::str_glue("... starting job {i}/{nrow(next_bettr_job)} ..."))
     next_bettr_job %>%
       dplyr::slice(i:i) %>%
       dplyr::rename_all(snakecase::to_snake_case) %>%
