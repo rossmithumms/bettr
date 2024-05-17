@@ -481,7 +481,7 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
   # Iterate over statements and excute them
   stmts %>%
     lapply(function(stmt) {
-      print(stringr::str_glue("... executing: {stmt}"))
+      message(stringr::str_glue("... executing: {stmt}"))
       # If there are 0 or 1 rows of bind parameters, don't iterate over them;
       # otherwise, iterate over row binds within statements (statement-major)
       if (row_bind_ct < 2) {
@@ -491,8 +491,8 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
         if (row_bind_ct == 1) {
           if (suppress_bind_logging == FALSE) {
             message(paste0(c(
-                "... binding: ",
-                stringr::str_glue("{names(binds)} = {paste(binds)}; ")
+              "... binding: ",
+              stringr::str_glue("{names(binds)} = {paste(binds)}; ")
             )))
           } else {
             message("... binding: <suppressed>")

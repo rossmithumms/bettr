@@ -8,10 +8,17 @@ readRenviron("/workspaces/brain/.Renviron")
 readRenviron("/workspaces/brain/.Renviron.test")
 
 test_cleanup <- function(do_cleanup = TRUE) {
-  bettr::execute_stmts(
-    connection_name = "bettr_host",
-    sql_file = "delete_test_bettr_rows"
-  )
+  if (do_cleanup) {
+    bettr::execute_stmts(
+      connection_name = "bettr_host",
+      sql_file = "delete_test_bettr_rows"
+    )
+    bettr::execute_stmts(
+      connection_name = "app_dqhi_dev",
+      sql_file = "drop_bettr_task_test"
+    )
+  }
+
   bettr::close_db_conn_pool()
 }
 
@@ -19,15 +26,14 @@ withr::defer({
   try(
     {
       test_cleanup(Sys.getenv("BETTR_TASK_TEST_CLEANUP_AFTER") == 1L)
-      bettr::execute_stmts(
-        connection_name = "app_dqhi_dev",
-        sql_file = "drop_bettr_task_test"
-      )
     }
   )
 })
 
-testthat::test_that("add jobs to the bettr host", {
+testthat::test_that("all bettr tests pass", {
+  #############################################################################
+  print("---------- add jobs to the bettr host")
+
   added_tasks <- tibble::tibble(
     bettr_task_git_project = c("bettr", "bettr", "bettr"),
     bettr_task_git_branch = c("feature/task", "feature/task", "feature/task"),
@@ -37,6 +43,9 @@ testthat::test_that("add jobs to the bettr host", {
   )
 
   added_tasks |> bettr::add_job_to_host()
+
+  #############################################################################
+  print("---------- get_next_bettr_task returns sorted list of all pending tasks")
 
   bettr_task <- tibble::tibble(
     bettr_task_git_project = "bettr",
@@ -64,8 +73,9 @@ testthat::test_that("add jobs to the bettr host", {
     bettr_task$bettr_task_name[3], "task_test_after"
   )
 
-  # Test again, this time with get_next_bettr_job.
-  # The result should be the same.
+  #############################################################################
+  print("---------- get_next_bettr_job returns sorted list of all tasks in only the next job")
+
   bettr_job <- tibble::tibble(
     bettr_task_git_project = "bettr",
     bettr_task_git_branch = "feature/task",
@@ -92,26 +102,16 @@ testthat::test_that("add jobs to the bettr host", {
     bettr_job$bettr_task_name[3], "task_test_after"
   )
 
-  test_cleanup()
-})
+  #############################################################################
+  print("---------- run_next_task_in_queue runs first task in first job")
+  # Run the top task in the stack; verify that it was the
+  # task `task_test_before` and that 1 row was created in its
+  # newly-minted table
 
-# Run the top task in the stack; verify that it was the
-# task `task_test_before` and that 1 row was created in its
-# newly-minted table
-testthat::test_that("runs the tasks with reporting and error handling", {
-  added_tasks <- tibble::tibble(
-    bettr_task_git_project = c("bettr", "bettr", "bettr"),
-    bettr_task_git_branch = c("feature/task", "feature/task", "feature/task"),
-    bettr_task_name = c("task_test_before", "task_test_error_during", "task_test_after"),
-    bettr_task_job_comment = c("__TEST__", "__TEST__", "__TEST__"),
-    bettr_task_job_priority = c(1, 1, 1)
-  )
-
-  added_tasks |> bettr::add_job_to_host()
-  # task_test_before
   task_result <- bettr::run_next_task_in_queue(
     project = "bettr",
-    branch = "feature/task"
+    branch = "feature/task",
+    return_result = TRUE
   )
 
   # The command that just ran must return an rs_result (with useful
@@ -156,9 +156,10 @@ testthat::test_that("runs the tasks with reporting and error handling", {
   )
 
   # task_test_error_during
-  bettr::run_next_task_in_queue(
+  task_result <- bettr::run_next_task_in_queue(
     project = "bettr",
-    branch = "feature/task"
+    branch = "feature/task",
+    return_result = TRUE
   )
 
   task_failures <- bettr::get_rows(
@@ -166,10 +167,20 @@ testthat::test_that("runs the tasks with reporting and error handling", {
     sql = "get_failed_bettr_tasks"
   )
 
-  test_cleanup()
-})
+  print("... expected error from get_failed_bettr_tasks:")
+  print(task_failures$last_error)
 
-testthat::test_that("run next job runs all tasks in next job successfully", {
+  # TODO verify that task_result's error matches task_failures
+
+  # Because this task is designed to fail, we need to clean out
+  # the current test tasks and refresh with ones that will
+  # process successfully.
+  # Delete them now and set up a new set of tasks for testing.
+  test_cleanup()
+
+  #############################################################################
+  print("---------- run_next_job_in_queue runs all tasks in next job successfully")
+
   added_tasks <- tibble::tibble(
     bettr_task_git_project = c("bettr", "bettr"),
     bettr_task_git_branch = c("feature/task", "feature/task"),
@@ -180,16 +191,24 @@ testthat::test_that("run next job runs all tasks in next job successfully", {
 
   added_tasks |> bettr::add_job_to_host()
 
-  task_results <- bettr::run_next_job_in_queue()
+  task_results <- bettr::run_next_job_in_queue(return_result = TRUE)
+
+  testthat::expect_equal(dplyr::count(task_results) |> as.double(), 2)
+
+  testthat::expect_equal(
+    task_results$bettr_task_name[1],
+    added_tasks$bettr_task_name[1]
+  )
+
+  testthat::expect_equal(
+    task_results$bettr_task_name[2],
+    added_tasks$bettr_task_name[2]
+  )
 
   task_test_rows <- bettr::get_rows(
     connection_name = "app_dqhi_dev",
     sql = "get_bettr_task_test"
   )
-
-  print(task_results)
-
-  testthat::expect_equal(length(task_results$rs_result), 2)
 
   testthat::expect_equal(task_test_rows$foo[1] %>% as.double(), 3)
   testthat::expect_equal(task_test_rows$bar[1] %>% as.double(), 2)
@@ -199,9 +218,10 @@ testthat::test_that("run next job runs all tasks in next job successfully", {
   )
 
   test_cleanup()
-})
 
-testthat::test_that("run next job skipping live refresh runs successfully", {
+  #############################################################################
+  print("---------- run_next_job_in_queue skips jobs with only live refresh tasks")
+
   tibble::tibble(
     bettr_task_git_project = c("bettr"),
     bettr_task_git_branch = c("feature/task"),

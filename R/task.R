@@ -164,11 +164,19 @@ add_job_to_host <- function(bettr_tasks) {
 #' @param incl_live_refresh Boolean Indicates whether live
 #' refresh tasks (with an opt_expiry_cache_mins > -1) should
 #' be considered for the next job.  Defaults to TRUE.
+#' @param return_result Boolean Indicates whether results
+#' should be returned.  Result objects are useful for
+#' debugging bug clutter up the job server log files.
+#' Defaults to FALSE.
+#' @param suppress_logging Boolean Suppresses the logging
+#' of the subprocess standard out and error. Defaults to FALSE.
 #' @export
 run_next_job_in_queue <- function(
   project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
   branch = Sys.getenv("BETTR_TASK_GIT_BRANCH"),
-  incl_live_refresh = TRUE) {
+  incl_live_refresh = TRUE,
+  return_result = FALSE,
+  suppress_logging = FALSE) {
   next_bettr_job <- tibble::tibble(
     bettr_task_git_project = project,
     bettr_task_git_branch = branch,
@@ -185,33 +193,37 @@ run_next_job_in_queue <- function(
     return()
   }
 
-  rs_results <- c()
-  bettr_tasks <- c()
+  task_results <- tibble::tibble()
 
   for (i in seq_len(nrow(next_bettr_job))) {
     message(
-      stringr::str_glue("... starting job {i}/{nrow(next_bettr_job)} ...")
+      stringr::str_glue("... starting job task {i}/{nrow(next_bettr_job)} ...")
     )
     task_result <- next_bettr_job %>%
       dplyr::slice(i:i) %>%
       dplyr::rename_all(snakecase::to_snake_case) %>%
       run_task()
 
-    rs_results <- append(
-      rs_results,
-      task_result$rs_result
-    )
+    task_results <- task_results %>%
+      dplyr::bind_rows(
+        task_result$bettr_task %>%
+          dplyr::mutate(
+            run_code = task_result$rs_result$code,
+            run_stdout = task_result$rs_result$stdout,
+            run_stderr = task_result$rs_result$stderr,
+            run_error = task_result$rs_result$error
+          )
+      )
 
-    bettr_tasks <- append(
-      bettr_tasks,
-      task_result$bettr_task
-    )
+    if (!suppress_logging) {
+      message(task_result$rs_result$stdout)
+      message(task_result$rs_result$stderr)
+    }
   }
 
-  list(
-    rs_results
-    , bettr_tasks
-  )
+  if (return_result) {
+    task_results
+  }
 }
 
 #' Run Next Project Task in Bettr Queue
@@ -228,11 +240,19 @@ run_next_job_in_queue <- function(
 #' @param incl_live_refresh Boolean Indicates whether live
 #' refresh tasks (with an opt_expiry_cache_mins > -1) should
 #' be considered for the next job.  Defaults to TRUE.
+#' @param return_result Boolean Indicates whether results
+#' should be returned.  Result objects are useful for
+#' debugging bug clutter up the job server log files.
+#' Defaults to FALSE.
+#' @param suppress_logging Boolean Suppresses the logging
+#' of the subprocess standard out and error. Defaults to FALSE.
 #' @export
 run_next_task_in_queue <- function(
   project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
   branch = Sys.getenv("BETTR_TASK_GIT_BRANCH"),
-  incl_live_refresh = TRUE) {
+  incl_live_refresh = TRUE,
+  return_result = FALSE,
+  suppress_logging = FALSE) {
   next_bettr_task <- tibble::tibble(
     bettr_task_git_project = project,
     bettr_task_git_branch = branch,
@@ -249,10 +269,19 @@ run_next_task_in_queue <- function(
     return()
   }
 
-  next_bettr_task %>%
+  task_result <- next_bettr_task %>%
     dplyr::slice_head(n = 1) %>%
     dplyr::rename_all(snakecase::to_snake_case) %>%
     run_task()
+
+  if (!suppress_logging) {
+    message(task_result$rs_result$stdout)
+    message(task_result$rs_result$stderr)
+  }
+
+  if (return_result) {
+    task_result
+  }
 }
 
 #' Set Up Task Environment and Execute Task
