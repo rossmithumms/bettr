@@ -161,13 +161,20 @@ add_job_to_host <- function(bettr_tasks) {
 #' filter for eligible jobs.
 #' @param branch String name of the project branch, used
 #' to filter for eligible jobs.
+#' @param incl_live_refresh Boolean Indicates whether live
+#' refresh tasks (with an opt_expiry_cache_mins > -1) should
+#' be considered for the next job.  Defaults to TRUE.
 #' @export
 run_next_job_in_queue <- function(
   project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
-  branch = Sys.getenv("BETTR_TASK_GIT_BRANCH")) {
+  branch = Sys.getenv("BETTR_TASK_GIT_BRANCH"),
+  incl_live_refresh = TRUE) {
   next_bettr_job <- tibble::tibble(
     bettr_task_git_project = project,
-    bettr_task_git_branch = branch
+    bettr_task_git_branch = branch,
+    incl_live_refresh = dplyr::if_else(
+      incl_live_refresh, 1, 0
+    )
   ) %>% get_rows(
     connection_name = "bettr_host",
     sql = "get_next_bettr_job"
@@ -178,13 +185,33 @@ run_next_job_in_queue <- function(
     return()
   }
 
+  rs_results <- c()
+  bettr_tasks <- c()
+
   for (i in seq_len(nrow(next_bettr_job))) {
-    message(stringr::str_glue("... starting job {i}/{nrow(next_bettr_job)} ..."))
-    next_bettr_job %>%
+    message(
+      stringr::str_glue("... starting job {i}/{nrow(next_bettr_job)} ...")
+    )
+    task_result <- next_bettr_job %>%
       dplyr::slice(i:i) %>%
       dplyr::rename_all(snakecase::to_snake_case) %>%
       run_task()
+
+    rs_results <- append(
+      rs_results,
+      task_result$rs_result
+    )
+
+    bettr_tasks <- append(
+      bettr_tasks,
+      task_result$bettr_task
+    )
   }
+
+  list(
+    rs_results
+    , bettr_tasks
+  )
 }
 
 #' Run Next Project Task in Bettr Queue
@@ -198,13 +225,20 @@ run_next_job_in_queue <- function(
 #' filter for eligible tasks.
 #' @param branch String name of the project branch, used
 #' to filter for eligible tasks.
+#' @param incl_live_refresh Boolean Indicates whether live
+#' refresh tasks (with an opt_expiry_cache_mins > -1) should
+#' be considered for the next job.  Defaults to TRUE.
 #' @export
 run_next_task_in_queue <- function(
   project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
-  branch = Sys.getenv("BETTR_TASK_GIT_BRANCH")) {
+  branch = Sys.getenv("BETTR_TASK_GIT_BRANCH"),
+  incl_live_refresh = TRUE) {
   next_bettr_task <- tibble::tibble(
     bettr_task_git_project = project,
-    bettr_task_git_branch = branch
+    bettr_task_git_branch = branch,
+    incl_live_refresh = dplyr::if_else(
+      incl_live_refresh, 1, 0
+    )
   ) %>% get_rows(
     connection_name = "bettr_host",
     sql = "get_next_bettr_task"

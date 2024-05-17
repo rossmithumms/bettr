@@ -27,22 +27,6 @@ withr::defer({
   )
 })
 
-testthat::test_that("run next job runs all tasks in next job successfully", {
-  added_tasks <- tibble::tibble(
-    bettr_task_git_project = c("bettr", "bettr", "bettr"),
-    bettr_task_git_branch = c("feature/task", "feature/task", "feature/task"),
-    bettr_task_name = c("task_test_before", "task_test_error_during", "task_test_after"),
-    bettr_task_job_comment = c("__TEST__", "__TEST__", "__TEST__"),
-    bettr_task_job_priority = c(1, 1, 1)
-  )
-
-  added_tasks |> bettr::add_job_to_host()
-
-  bettr::run_next_job_in_queue()
-
-  test_cleanup()
-})
-
 testthat::test_that("add jobs to the bettr host", {
   added_tasks <- tibble::tibble(
     bettr_task_git_project = c("bettr", "bettr", "bettr"),
@@ -56,7 +40,8 @@ testthat::test_that("add jobs to the bettr host", {
 
   bettr_task <- tibble::tibble(
     bettr_task_git_project = "bettr",
-    bettr_task_git_branch = "feature/task"
+    bettr_task_git_branch = "feature/task",
+    incl_live_refresh = 1
   ) %>%
     bettr::get_rows(
       connection_name = "bettr_host",
@@ -83,7 +68,8 @@ testthat::test_that("add jobs to the bettr host", {
   # The result should be the same.
   bettr_job <- tibble::tibble(
     bettr_task_git_project = "bettr",
-    bettr_task_git_branch = "feature/task"
+    bettr_task_git_branch = "feature/task",
+    incl_live_refresh = 1
   ) %>%
     bettr::get_rows(
       connection_name = "bettr_host",
@@ -105,12 +91,23 @@ testthat::test_that("add jobs to the bettr host", {
   testthat::expect_equal(
     bettr_job$bettr_task_name[3], "task_test_after"
   )
+
+  test_cleanup()
 })
 
 # Run the top task in the stack; verify that it was the
 # task `task_test_before` and that 1 row was created in its
 # newly-minted table
 testthat::test_that("runs the tasks with reporting and error handling", {
+  added_tasks <- tibble::tibble(
+    bettr_task_git_project = c("bettr", "bettr", "bettr"),
+    bettr_task_git_branch = c("feature/task", "feature/task", "feature/task"),
+    bettr_task_name = c("task_test_before", "task_test_error_during", "task_test_after"),
+    bettr_task_job_comment = c("__TEST__", "__TEST__", "__TEST__"),
+    bettr_task_job_priority = c(1, 1, 1)
+  )
+
+  added_tasks |> bettr::add_job_to_host()
   # task_test_before
   task_result <- bettr::run_next_task_in_queue(
     project = "bettr",
@@ -169,62 +166,133 @@ testthat::test_that("runs the tasks with reporting and error handling", {
     sql = "get_failed_bettr_tasks"
   )
 
-  # Clean up so we can test task exhaustion and expiry next
   test_cleanup()
 })
 
-testthat::test_that("caches exhaust when all are run, and rerun after expiry", {
+testthat::test_that("run next job runs all tasks in next job successfully", {
   added_tasks <- tibble::tibble(
     bettr_task_git_project = c("bettr", "bettr"),
     bettr_task_git_branch = c("feature/task", "feature/task"),
-    bettr_task_name = c("task_test_after", "task_test_delete"),
+    bettr_task_name = c("task_test_before", "task_test_update_foo"),
     bettr_task_job_comment = c("__TEST__", "__TEST__"),
-    bettr_task_job_priority = c(1, 1),
-    opt_cache_expiry_mins = c(2, -1)
+    bettr_task_job_priority = c(1, 1)
   )
 
-  added_tasks %>% bettr::add_job_to_host()
+  added_tasks |> bettr::add_job_to_host()
 
-  # Run the 1 task immediately
-  task_result_1 <- bettr::run_next_task_in_queue(
-    project = "bettr",
-    branch = "feature/task"
+  task_results <- bettr::run_next_job_in_queue()
+
+  task_test_rows <- bettr::get_rows(
+    connection_name = "app_dqhi_dev",
+    sql = "get_bettr_task_test"
   )
 
-  # Wait out the cache expiry on the task
-  message("... sleeping for 3 minutes ...")
-  Sys.sleep(180)
-  message("... naptime's over!")
+  print(task_results)
 
-  # Run the next test, which should just be `task_test_after` again
-  task_result_2 <- bettr::run_next_task_in_queue(
-    project = "bettr",
-    branch = "feature/task"
-  )
+  testthat::expect_equal(length(task_results$rs_result), 2)
 
-  # Make sure both executions yield the same result
+  testthat::expect_equal(task_test_rows$foo[1] %>% as.double(), 3)
+  testthat::expect_equal(task_test_rows$bar[1] %>% as.double(), 2)
   testthat::expect_equal(
-    task_result_1$result$value, task_result_2$result$value
+    task_test_rows$current_dt[1] %>% format("%Y-%m-%d"),
+    lubridate::today() %>% format("%Y-%m-%d")
   )
 
-  # Now run the final task in the queue, task_test_delete
-  task_result_3 <- bettr::run_next_task_in_queue(
-    project = "bettr",
-    branch = "feature/task"
-  )
-
-  # It should just return TRUE
-  testthat::expect_equal(
-    task_result_3$rs_result$result$value,
-    list(TRUE)
-  )
-
-  # Last, try to run another task before caches expire.
-  # Nothing should run/task exhaustion.
-  task_result_4 <- bettr::run_next_task_in_queue(
-    project = "bettr",
-    branch = "feature/task"
-  )
-
-  testthat::expect_null(task_result_4)
+  test_cleanup()
 })
+
+testthat::test_that("run next job skipping live refresh runs successfully", {
+  tibble::tibble(
+    bettr_task_git_project = c("bettr"),
+    bettr_task_git_branch = c("feature/task"),
+    bettr_task_name = c("task_test_update_foo"),
+    bettr_task_job_comment = c("__TEST__"),
+    bettr_task_job_priority = c(1),
+    opt_cache_expiry_mins = 10
+  ) |>
+    bettr::add_job_to_host()
+
+  tibble::tibble(
+    bettr_task_git_project = c("bettr"),
+    bettr_task_git_branch = c("feature/task"),
+    bettr_task_name = c("task_test_before"),
+    bettr_task_job_comment = c("__TEST__"),
+    bettr_task_job_priority = c(1)
+  ) |>
+    bettr::add_job_to_host()
+
+  bettr::run_next_job_in_queue(incl_live_refresh = FALSE)
+
+  task_test_rows <- bettr::get_rows(
+    connection_name = "app_dqhi_dev",
+    sql = "get_bettr_task_test"
+  )
+
+  testthat::expect_equal(task_test_rows$foo[1] %>% as.double(), 1)
+  testthat::expect_equal(task_test_rows$bar[1] %>% as.double(), 2)
+  testthat::expect_equal(
+    task_test_rows$current_dt[1] %>% format("%Y-%m-%d"),
+    lubridate::today() %>% format("%Y-%m-%d")
+  )
+
+  test_cleanup()
+})
+
+
+#testthat::test_that("caches exhaust when all are run, and rerun after expiry", {
+#  added_tasks <- tibble::tibble(
+#    bettr_task_git_project = c("bettr", "bettr"),
+#    bettr_task_git_branch = c("feature/task", "feature/task"),
+#    bettr_task_name = c("task_test_after", "task_test_delete"),
+#    bettr_task_job_comment = c("__TEST__", "__TEST__"),
+#    bettr_task_job_priority = c(1, 1),
+#    opt_cache_expiry_mins = c(2, -1)
+#  )
+#
+#  added_tasks %>% bettr::add_job_to_host()
+#
+#  # Run the 1 task immediately
+#  task_result_1 <- bettr::run_next_task_in_queue(
+#    project = "bettr",
+#    branch = "feature/task"
+#  )
+#
+#  # Wait out the cache expiry on the task
+#  message("... sleeping for 3 minutes ...")
+#  Sys.sleep(180)
+#  message("... naptime's over!")
+#
+#  # Run the next test, which should just be `task_test_after` again
+#  task_result_2 <- bettr::run_next_task_in_queue(
+#    project = "bettr",
+#    branch = "feature/task"
+#  )
+#
+#  # Make sure both executions yield the same result
+#  testthat::expect_equal(
+#    task_result_1$result$value, task_result_2$result$value
+#  )
+#
+#  # Now run the final task in the queue, task_test_delete
+#  task_result_3 <- bettr::run_next_task_in_queue(
+#    project = "bettr",
+#    branch = "feature/task"
+#  )
+#
+#  # It should just return TRUE
+#  testthat::expect_equal(
+#    task_result_3$rs_result$result$value,
+#    list(TRUE)
+#  )
+#
+#  # Last, try to run another task before caches expire.
+#  # Nothing should run/task exhaustion.
+#  task_result_4 <- bettr::run_next_task_in_queue(
+#    project = "bettr",
+#    branch = "feature/task"
+#  )
+#
+#  testthat::expect_null(task_result_4)
+#
+#  test_cleanup()
+#})

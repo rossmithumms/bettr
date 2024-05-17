@@ -6,7 +6,8 @@
 \usage{
 run_next_job_in_queue(
   project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
-  branch = Sys.getenv("BETTR_TASK_GIT_BRANCH")
+  branch = Sys.getenv("BETTR_TASK_GIT_BRANCH"),
+  incl_live_refresh = TRUE
 )
 }
 \arguments{
@@ -15,6 +16,10 @@ filter for eligible jobs.}
 
 \item{branch}{String name of the project branch, used
 to filter for eligible jobs.}
+
+\item{incl_live_refresh}{Boolean Indicates whether live
+refresh tasks (with an opt_expiry_cache_mins > -1) should
+be considered for the next job.  Defaults to TRUE.}
 }
 \description{
 This uses the provided git repository (project) and
