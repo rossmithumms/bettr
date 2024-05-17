@@ -120,7 +120,7 @@ add_job_to_host <- function(bettr_tasks) {
       # Apply the next available job ID
       bettr_tasks <- bettr_tasks %>%
         dplyr::mutate(
-          bettr_task_job_id = bettr::get_rows(
+          bettr_task_job_id = get_rows(
             connection_name = "bettr_host",
             sql = "get_next_bettr_job_id"
           ) %>%
@@ -204,6 +204,19 @@ run_next_job_in_queue <- function(
       dplyr::rename_all(snakecase::to_snake_case) %>%
       run_task()
 
+    error <- ""
+
+    if (0 != length(task_result$rs_result$error)) {
+      error <- stringr::str_glue(
+        paste(
+          "Error: {task_result$rs_result$error$message}",
+          "{task_result$rs_result$error$parent$message}",
+          sep = "\n"
+        )
+      ) %>%
+        as.character()
+    }
+
     task_results <- task_results %>%
       dplyr::bind_rows(
         task_result$bettr_task %>%
@@ -211,7 +224,7 @@ run_next_job_in_queue <- function(
             run_code = task_result$rs_result$code,
             run_stdout = task_result$rs_result$stdout,
             run_stderr = task_result$rs_result$stderr,
-            run_error = task_result$rs_result$error
+            run_error = error
           )
       )
 

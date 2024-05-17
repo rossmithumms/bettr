@@ -8,7 +8,8 @@ run_next_task_in_queue(
   project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
   branch = Sys.getenv("BETTR_TASK_GIT_BRANCH"),
   incl_live_refresh = TRUE,
-  return_result = FALSE
+  return_result = FALSE,
+  suppress_logging = FALSE
 )
 }
 \arguments{
@@ -26,6 +27,9 @@ be considered for the next job.  Defaults to TRUE.}
 should be returned.  Result objects are useful for
 debugging bug clutter up the job server log files.
 Defaults to FALSE.}
+
+\item{suppress_logging}{Boolean Suppresses the logging
+of the subprocess standard out and error. Defaults to FALSE.}
 }
 \description{
 This uses the provided git repository (project) and

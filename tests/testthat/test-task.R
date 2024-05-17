@@ -167,9 +167,6 @@ testthat::test_that("all bettr tests pass", {
     sql = "get_failed_bettr_tasks"
   )
 
-  print("... expected error from get_failed_bettr_tasks:")
-  print(task_failures$last_error)
-
   # TODO verify that task_result's error matches task_failures
 
   # Because this task is designed to fail, we need to clean out
@@ -256,63 +253,70 @@ testthat::test_that("all bettr tests pass", {
   )
 
   test_cleanup()
+
+  #############################################################################
+  print("---------- caches exhaust when all are run, and rerun ater expiry")
+
+  added_tasks <- tibble::tibble(
+    bettr_task_git_project = c("bettr", "bettr", "bettr"),
+    bettr_task_git_branch = c("feature/task", "feature/task", "feature/task"),
+    bettr_task_name = c("task_test_before", "task_test_after", "task_test_delete"),
+    bettr_task_job_comment = c("__TEST__", "__TEST__", "__TEST__"),
+    bettr_task_job_priority = c(1, 1, 1),
+    opt_cache_expiry_mins = c(-1, 1, -1)
+  )
+
+  added_tasks %>% bettr::add_job_to_host()
+
+  # Run the first two tasks immediately; keep the 2nd result for testing
+  bettr::run_next_task_in_queue(
+    project = "bettr",
+    branch = "feature/task",
+  )
+
+  task_result_1 <- bettr::run_next_task_in_queue(
+    project = "bettr",
+    branch = "feature/task",
+    return_result = TRUE
+  )
+
+  # Wait out the cache expiry on the task
+  message("... sleeping for 1 minute ...")
+  Sys.sleep(60)
+  message("... naptime's over!")
+
+  # Run the next test, which should just be `task_test_after` again
+  task_result_2 <- bettr::run_next_task_in_queue(
+    project = "bettr",
+    branch = "feature/task",
+    return_result = TRUE
+  )
+
+  # Make sure both executions yield the same result
+  testthat::expect_equal(
+    task_result_1$result$value, task_result_2$result$value
+  )
+
+  # Now run the final task in the queue, task_test_delete
+  task_result_3 <- bettr::run_next_task_in_queue(
+    project = "bettr",
+    branch = "feature/task",
+    return_result = TRUE
+  )
+
+  # It should just return TRUE
+  testthat::expect_equal(
+    task_result_3$rs_result$result$value,
+    "task_test_delete"
+  )
+
+  # Last, try to run another task before caches expire.
+  # Nothing should run/task exhaustion.
+  task_result_4 <- bettr::run_next_task_in_queue(
+    project = "bettr",
+    branch = "feature/task",
+    return_result = TRUE
+  )
+
+  testthat::expect_null(task_result_4)
 })
-
-
-#testthat::test_that("caches exhaust when all are run, and rerun after expiry", {
-#  added_tasks <- tibble::tibble(
-#    bettr_task_git_project = c("bettr", "bettr"),
-#    bettr_task_git_branch = c("feature/task", "feature/task"),
-#    bettr_task_name = c("task_test_after", "task_test_delete"),
-#    bettr_task_job_comment = c("__TEST__", "__TEST__"),
-#    bettr_task_job_priority = c(1, 1),
-#    opt_cache_expiry_mins = c(2, -1)
-#  )
-#
-#  added_tasks %>% bettr::add_job_to_host()
-#
-#  # Run the 1 task immediately
-#  task_result_1 <- bettr::run_next_task_in_queue(
-#    project = "bettr",
-#    branch = "feature/task"
-#  )
-#
-#  # Wait out the cache expiry on the task
-#  message("... sleeping for 3 minutes ...")
-#  Sys.sleep(180)
-#  message("... naptime's over!")
-#
-#  # Run the next test, which should just be `task_test_after` again
-#  task_result_2 <- bettr::run_next_task_in_queue(
-#    project = "bettr",
-#    branch = "feature/task"
-#  )
-#
-#  # Make sure both executions yield the same result
-#  testthat::expect_equal(
-#    task_result_1$result$value, task_result_2$result$value
-#  )
-#
-#  # Now run the final task in the queue, task_test_delete
-#  task_result_3 <- bettr::run_next_task_in_queue(
-#    project = "bettr",
-#    branch = "feature/task"
-#  )
-#
-#  # It should just return TRUE
-#  testthat::expect_equal(
-#    task_result_3$rs_result$result$value,
-#    list(TRUE)
-#  )
-#
-#  # Last, try to run another task before caches expire.
-#  # Nothing should run/task exhaustion.
-#  task_result_4 <- bettr::run_next_task_in_queue(
-#    project = "bettr",
-#    branch = "feature/task"
-#  )
-#
-#  testthat::expect_null(task_result_4)
-#
-#  test_cleanup()
-#})

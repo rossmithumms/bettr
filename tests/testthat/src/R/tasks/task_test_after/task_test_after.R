@@ -7,3 +7,6 @@ bettr::get_rows(
   connection_name = "app_dqhi_dev",
   sql = "get_bettr_task_test_before_now"
 )
+
+# An identifier to show this task is the one that exited
+"task_test_after"
