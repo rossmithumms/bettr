@@ -229,8 +229,21 @@ run_next_job_in_queue <- function(
       )
 
     if (!suppress_logging) {
+      message(stringr::str_glue(
+        "------ {as.character(task_result$bettr_task$bettr_task_name)} start"
+      ))
+      message("------ stdout")
       message(task_result$rs_result$stdout)
+      message("------ stderr")
       message(task_result$rs_result$stderr)
+
+      if (error != "") {
+        message("!!!!!! error")
+        message(error)
+      }
+      message(stringr::str_glue(
+        "...... {as.character(task_result$bettr_task$bettr_task_name)} end"
+      ))
     }
   }
 

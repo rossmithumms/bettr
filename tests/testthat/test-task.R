@@ -281,8 +281,8 @@ testthat::test_that("all bettr tests pass", {
   )
 
   # Wait out the cache expiry on the task
-  message("... sleeping for 1 minute ...")
-  Sys.sleep(60)
+  message("... sleeping for 75 seconds ...")
+  Sys.sleep(75)
   message("... naptime's over!")
 
   # Run the next test, which should just be `task_test_after` again
@@ -317,6 +317,6 @@ testthat::test_that("all bettr tests pass", {
     branch = "feature/task",
     return_result = TRUE
   )
-
+  
   testthat::expect_null(task_result_4)
 })
