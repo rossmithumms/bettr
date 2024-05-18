@@ -470,11 +470,11 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
     stringr::str_split(pattern = ";;;") %>%
     tibble::tibble(
       stmt = .[[1]]
-    ) |>
+    ) %>%
     dplyr::filter(
       !stringr::str_detect(stmt, "^ *$")
-    ) |>
-    dplyr::pull() |>
+    ) %>%
+    dplyr::pull() %>%
     as.list()
   row_bind_ct <- dplyr::count(binds) %>% dplyr::pull()
 
@@ -570,8 +570,8 @@ generate_init_sql <- function(
 
   table_name <- toupper(table_name)
   connection_name <- toupper(connection_name)
-  col_names <- rows |> names() |> toupper()
-  index_columns <- index_columns |> toupper()
+  col_names <- rows %>% names() %>% toupper()
+  index_columns <- index_columns %>% toupper()
   if (index_id_columns) {
     index_columns <- vctrs::vec_c(
       index_columns,
@@ -599,7 +599,7 @@ generate_init_sql <- function(
       sep = ""
     )
   )
-  index_stmts <- index_columns |>
+  index_stmts <- index_columns %>%
     (\(name) {
       stringr::str_glue(
         paste0(
@@ -608,7 +608,7 @@ generate_init_sql <- function(
           collapse = ";;;\n"
         )
       )
-    })() |>
+    })() %>%
     paste0(collapse = ";;;\n")
   view_stmt <- stringr::str_glue(
     "CREATE VIEW V_{table_name} (\n  {table_name}_KEY,\n  ",
@@ -624,12 +624,12 @@ generate_init_sql <- function(
     "\",\n    AUDIT_INSERT_DT\n  FROM\n    {connection_name}.{table_name}\n)",
     sep = ""
   )
-  view_grant_stmts <- view_grants |>
+  view_grant_stmts <- view_grants %>%
     (\(grant) {
       stringr::str_glue(
         "GRANT SELECT ON V_{table_name} TO {toupper(grant)}"
       )
-    })() |>
+    })() %>%
     paste0(collapse = ";;;\n")
   init_sql <- paste(
     alter_table_stmt,

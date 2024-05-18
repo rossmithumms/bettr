@@ -255,7 +255,7 @@ testthat::test_that("all bettr tests pass", {
   test_cleanup()
 
   #############################################################################
-  print("---------- caches exhaust when all are run, and rerun ater expiry")
+  print("---------- caches exhaust when all are run, and rerun after expiry")
 
   added_tasks <- tibble::tibble(
     bettr_task_git_project = c("bettr", "bettr", "bettr"),
