@@ -1,6 +1,6 @@
 Package: bettr
 Title: Simpler Tidy Oracle Queries and R Shiny Helpers
-Version: 1.0.1.22
+Version: 1.0.1.23
 Authors@R: 
     person("Ross", "Smith", , "rossmith@med.umich.edu", role = c("aut", "cre"),
            comment = c(ORCID = "YOUR-ORCID-ID"))
@@ -8,7 +8,7 @@ Description: Interact with Oracle DBs and R Shiny apps in a re-usable manner.
 License: `use_mit_license()`
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.2
 Imports:
     readr (== 2.1.4),
     stringr (== 1.5.0),
