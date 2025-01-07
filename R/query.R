@@ -15,7 +15,6 @@ globalVariables(c("session", "parseQueryString", "bettr_connection_pool"))
 get_db_conn <- function(connection_name) {
   connection_name <- toupper(connection_name)
   if (exists("bettr_connection_pool") == FALSE) {
-    message("+++ creating new connection pool")
     bettr_connection_pool <<- list()
   }
 
@@ -23,7 +22,6 @@ get_db_conn <- function(connection_name) {
     bettr_connection_pool[[connection_name]] <<- open_db_conn(
       connection_name = connection_name
     )
-    message(stringr::str_glue("+++ opened pool connection: {connection_name}"))
   }
 
   bettr_connection_pool[[connection_name]]
@@ -42,6 +40,7 @@ get_db_conn <- function(connection_name) {
 #' @return A DBI connection object
 open_db_conn <- function(connection_name) {
   connection_name <- toupper(connection_name)
+  message(stringr::str_glue("+++ opening connection: {connection_name}"))
   ROracle::dbConnect(drv = DBI::dbDriver("Oracle"),
     username = get_db_username(connection_name),
     password = get_db_password(connection_name),
@@ -86,25 +85,24 @@ close_db_conn_pool <- function() {
     })
 
   bettr_connection_pool <<- list()
-  message("--- pool closed")
 }
 
 #' Get Rows from a Database
-#' 
+#'
 #' This function allows for parameterized, batch SELECT queries to an Oracle connection.
 #' The SQL statement must be stored in a file located in the following path location:
 #' <SQL_DIR>/<CONNECTION_NAME>/<SQL>.sql
-#' 
+#'
 #' The query will be called for each row in the args object (a data frame, data.table, 
 #' or tibble).  The SQL file may expose bind parameters that will be used through the
 #' DBI bind API.  The named bind parameters must be unique, begin with a question mark,
 #' and be formatted in snake_case.
-#' 
+#'
 #' The SQL_DIR must be provided as an absolute path in an environment variable.
-#' 
+#'
 #' By requiring the SQL to be stored outside this file it can be versioned, tested, and
 #' audited separately from the R script calling this function.
-#' 
+#'
 #' @param binds a data frame, data.table, or tibble with bind parameters.  Query will be called once for each row.
 #' @param connection_name The snake_case name of the connection. This is used to retrieve the
 #' environment variables to open the connection and locate the SQL query in the SQL_DIR directory.
@@ -177,6 +175,7 @@ get_rows_binds <- function(binds, connection_name, sql, suppress_bind_logging = 
     },
 
     finally = {
+      close_db_conn_pool()
     }
   )
 }
@@ -213,6 +212,7 @@ get_rows_nobinds <- function(connection_name, sql) {
     },
 
     finally = {
+      close_db_conn_pool()
     }
   )
 }
@@ -268,21 +268,26 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
     },
 
     error = function(err) {
-      message(ROracle::dbGetException(conn))
+      message("!!! Error durring append_rows")
+      message(err)
+      if (exists(conn)) {
+        message(ROracle::dbGetException(conn))
+      }
       stop(err)
     },
 
     finally = {
+      close_db_conn_pool()
     }
   )
 }
 
 #' Ensure a Table Exists for Appending Rows
-#' 
+#'
 #' This function ensures a table exists in the named connection for appending rows.
 #' Note that this function depends on a SQL file named `create_table_<table_name>.sql`
 #' in the connection-specific directory.
-#' 
+#'
 #' @param rows Table structure with representative data for the table to create/verify.
 #' @param connection_name The snake_case name of the connection.
 #' @param table_name The snake_case name of the table to ensure exists in the database.
@@ -302,7 +307,8 @@ ensure_table <- function(rows, connection_name, table_name) {
         table_name = table_name
       )
 
-      message(stringr::str_glue("... table exists: {table_exists}"))
+      # message(stringr::str_glue("... table exists: {table_exists}"))
+      conn <- get_db_conn(connection_name = connection_name)
 
       if (table_exists == FALSE) {
         # Create the table with the dbWriteTable API with one row,
@@ -332,7 +338,6 @@ ensure_table <- function(rows, connection_name, table_name) {
           sql = tolower(stringr::str_glue("init_{table_name}"))
         )
 
-        ROracle::dbCommit(conn = conn)
         message(stringr::str_glue("+++ initialized table: {table_name}"))
       } else {
         message(stringr::str_glue("--- table already exists: {table_name}"))
@@ -346,23 +351,29 @@ ensure_table <- function(rows, connection_name, table_name) {
     },
 
     error = function(err) {
-      message(ROracle::dbGetException(conn))
+      message("!!! Error durring ensure_table")
+      message(err)
+      if (exists(conn)) {
+        message(ROracle::dbGetException(conn))
+      }
       stop(err)
     },
 
     finally = {
+      close_db_conn_pool()
     }
   )
 }
 
 #' Check if a Table Exists
-#' 
+#'
 #' Implementing this function here because ROracle::dbExistsTable is being weird.
-#' 
+#'
 #' @param connection_name The snake_case name of the connection.
 #' @param table_name The snake_case name of the table to drop.
 exists_table <- function(connection_name, table_name) {
-  tryCatch({
+  tryCatch(
+    {
       connection_name <- toupper(connection_name)
       conn <- get_db_conn(connection_name = connection_name)
       table_name <- toupper(table_name)
@@ -390,26 +401,32 @@ exists_table <- function(connection_name, table_name) {
     },
 
     error = function(err) {
-      message(ROracle::dbGetException(conn))
+      message("!!! Error durring exists_table")
+      message(err)
+      if (exists(conn)) {
+        message(ROracle::dbGetException(conn))
+      }
       stop(err)
     },
 
     finally = {
+      close_db_conn_pool()
     }
   )
 }
 
 #' Drop a Table
-#' 
+#'
 #' Drops a table from the database.
 #' Note that this function depends on a SQL file named `drop_table_<table_name>.sql`
 #' in the connection-specific directory.
-#' 
+#'
 #' @param connection_name The snake_case name of the connection.
 #' @param table_name The snake_case name of the table to drop.
 #' @export
 drop_table <- function(connection_name, table_name) {
-  tryCatch({
+  tryCatch(
+    {
       connection_name <- toupper(connection_name)
 
       # If the table does not exist yet, create it
@@ -425,7 +442,6 @@ drop_table <- function(connection_name, table_name) {
           sql = tolower(stringr::str_glue("drop_{table_name}"))
         )
 
-        ROracle::dbCommit(conn = conn)
         message(stringr::str_glue("+++ dropped table: {table_name}"))
       } else {
         message(stringr::str_glue("+++ table does not exist: {table_name}"))
@@ -443,6 +459,7 @@ drop_table <- function(connection_name, table_name) {
     },
 
     finally = {
+      close_db_conn_pool()
     }
   )
 }
@@ -457,83 +474,105 @@ drop_table <- function(connection_name, table_name) {
 #' @export
 execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
   suppress_bind_logging = FALSE) {
-  connection_name <- toupper(connection_name)
-  conn <- get_db_conn(connection_name = connection_name)
-  binds <- binds %>%
-    tibble::as_tibble() %>%
-    dplyr::rename_with(toupper)
-  stmts <- load_sql(
-      sql_file,
-      connection_name = connection_name
-    ) %>%
-    stringr::str_replace_all(pattern = "[ \t\r\n]+", replacement = " ") %>%
-    stringr::str_split(pattern = ";;;") %>%
-    tibble::tibble(
-      stmt = .[[1]]
-    ) %>%
-    dplyr::filter(
-      !stringr::str_detect(stmt, "^ *$")
-    ) %>%
-    dplyr::pull() %>%
-    as.list()
-  row_bind_ct <- dplyr::count(binds) %>% dplyr::pull()
+  tryCatch(
+    {
+      connection_name <- toupper(connection_name)
+      conn <- get_db_conn(connection_name = connection_name)
+      binds <- binds %>%
+        tibble::as_tibble() %>%
+        dplyr::rename_with(toupper)
+      stmts <- load_sql(
+          sql_file,
+          connection_name = connection_name
+        ) %>%
+        stringr::str_replace_all(pattern = "[ \t\r\n]+", replacement = " ") %>%
+        stringr::str_split(pattern = ";;;") %>%
+        tibble::tibble(
+          stmt = .[[1]]
+        ) %>%
+        dplyr::filter(
+          !stringr::str_detect(stmt, "^ *$")
+        ) %>%
+        dplyr::pull() %>%
+        as.list()
+      row_bind_ct <- dplyr::count(binds) %>% dplyr::pull()
 
-  # Iterate over statements and excute them
-  stmts %>%
-    lapply(function(stmt) {
-      message(stringr::str_glue("... executing: {stmt}"))
-      # If there are 0 or 1 rows of bind parameters, don't iterate over them;
-      # otherwise, iterate over row binds within statements (statement-major)
-      if (row_bind_ct < 2) {
-        binds <- binds %>%
-          dplyr::select(get_bind_colnames(stmt))
-        # Only log binds if there are any
-        if (row_bind_ct == 1) {
-          if (suppress_bind_logging == FALSE) {
-            message(paste0(c(
-              "... binding: ",
-              stringr::str_glue("{names(binds)} = {paste(binds)}; ")
-            )))
-          } else {
-            message("... binding: <suppressed>")
-          }
-        }
-
-        ROracle::dbSendQuery(
-          conn = conn,
-          statement = stmt,
-          data = binds
-        )
-
-        # Finalize the work
-        ROracle::dbCommit(conn = conn)
-      } else {
-        binds %>%
-          as.list() %>%
-          purrr::list_transpose() %>%
-          lapply(function(row_binds) {
-            row_binds <- row_binds %>%
-              tibble::as_tibble() %>%
+      # Iterate over statements and excute them
+      stmts %>%
+        lapply(function(stmt) {
+          message(stringr::str_glue("... executing: {stmt}"))
+          # If there are 0 or 1 rows of bind parameters,
+          # don't iterate over them; otherwise, iterate over
+          # row binds within statements (statement-major)
+          if (row_bind_ct < 2) {
+            binds <- binds %>%
               dplyr::select(get_bind_colnames(stmt))
-            if (suppress_bind_logging == FALSE) {
-              message(paste0(c(
+            # Only log binds if there are any
+            if (row_bind_ct == 1) {
+              if (suppress_bind_logging == FALSE) {
+                message(paste0(c(
                   "... binding: ",
-                  stringr::str_glue("{names(row_binds)} = {paste(row_binds)}; ")
-              )))
-            } else {
-              message("... binding: <suppressed>")
+                  stringr::str_glue("{names(binds)} = {paste(binds)}; ")
+                )))
+              } else {
+                message("... binding: <suppressed>")
+              }
             }
+
             ROracle::dbSendQuery(
               conn = conn,
               statement = stmt,
-              data = row_binds
+              data = binds
             )
 
             # Finalize the work
             ROracle::dbCommit(conn = conn)
-          })
-      }
-  })
+          } else {
+            binds %>%
+              as.list() %>%
+              purrr::list_transpose() %>%
+              lapply(function(row_binds) {
+                row_binds <- row_binds %>%
+                  tibble::as_tibble() %>%
+                  dplyr::select(get_bind_colnames(stmt))
+                if (suppress_bind_logging == FALSE) {
+                  message(paste0(
+                    c(
+                      "... binding: ",
+                      stringr::str_glue(
+                        "{names(row_binds)} = {paste(row_binds)}; "
+                      )
+                    )
+                  ))
+                } else {
+                  message("... binding: <suppressed>")
+                }
+                ROracle::dbSendQuery(
+                  conn = conn,
+                  statement = stmt,
+                  data = row_binds
+                )
+
+                # Finalize the work
+                ROracle::dbCommit(conn = conn)
+              })
+          }
+        })
+    },
+
+    warning = function(warn) {
+      warning(warn)
+    },
+
+    error = function(err) {
+      message(ROracle::dbGetException(conn))
+      stop(err)
+    },
+
+    finally = {
+      close_db_conn_pool()
+    }
+  )
 }
 
 #' Generate and Save ETL Table Initialization SQL

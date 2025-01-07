@@ -3,15 +3,18 @@ readRenviron("/workspaces/brain/.Renviron.test")
 Sys.setenv(SQL_DIR = Sys.getenv("BETTR_SQL_DIR"))
 test_tz <- Sys.getenv("TZ")
 
-withr::defer({
-  message("!!! testing over; cleanup time")
-  bettr::drop_table(
-    connection_name = "app_dqhi_dev",
-    table_name = "bettr_test_data"
-  )
-})
+testthat::teardown(
+  {
+    bettr::drop_table(
+      connection_name = "app_dqhi_dev",
+      table_name = "bettr_test_data"
+    )
+  }
+)
 
-testthat::test_that("we can create a table, append data to it, pull data from it, and drop the table", {
+testthat::test_that(
+  "we can create a table, append/pull data, and drop the table",
+  {
     rows <- tibble::tibble(
       value_str = c("Anne", "Betsy", "Cathy", "Donna"),
       value_num = c(1, 2, 3, 4),
@@ -30,7 +33,6 @@ testthat::test_that("we can create a table, append data to it, pull data from it
       table_name = "bettr_test_data",
       suppress_bind_logging = TRUE
     )
-    tictoc::toc()
 
     message("----- we can pull data from it")
     actual <- tibble::tibble(
@@ -42,27 +44,23 @@ testthat::test_that("we can create a table, append data to it, pull data from it
       )
     )
 
-    tictoc::tic()
     expected <- bettr::get_rows(
       connection_name = "app_dqhi_dev",
       sql = "get_bettr_test_data"
     ) %>%
       tibble::tibble()
-    tictoc::toc()
 
     testthat::expect_equal(
       rows %>% dplyr::summarise(n = dplyr::n()),
       expected %>% dplyr::summarise(n = dplyr::n())
     )
 
-    tictoc::tic()
     expected <- tibble::tibble(value_num = 2) %>%
       bettr::get_rows(
         connection_name = "app_dqhi_dev",
         sql = "get_bettr_test_data_by_number"
       ) %>%
       tibble::tibble()
-    tictoc::toc()
 
     testthat::expect_equal(
       actual %>% dplyr::select(value_num) %>% dplyr::pull(),
@@ -91,7 +89,9 @@ testthat::test_that("we can create a table, append data to it, pull data from it
   }
 )
 
-testthat::test_that("We can run one or more transactions with zero, one, or many bind rows", {
+testthat::test_that(
+  "We can run one or more transactions with zero, one, or many bind rows",
+  {
     rows <- tibble::tibble(
       value_str = c("Anne", "Betsy", "Cathy", "Donna"),
       value_num = c(1, 2, 3, 4),
@@ -262,6 +262,5 @@ testthat::test_that("We can run one or more transactions with zero, one, or many
         dplyr::count() %>%
         dplyr::pull()
     )
-})
-
-withr::deferred_run()
+  }
+)

@@ -7,28 +7,33 @@
 readRenviron("/workspaces/brain/.Renviron")
 readRenviron("/workspaces/brain/.Renviron.test")
 
-test_cleanup <- function(do_cleanup = TRUE) {
-  if (do_cleanup) {
-    bettr::execute_stmts(
-      connection_name = "bettr_host",
-      sql_file = "delete_test_bettr_rows"
-    )
-    bettr::execute_stmts(
-      connection_name = "app_dqhi_dev",
-      sql_file = "drop_bettr_task_test"
-    )
-  }
-
-  bettr::close_db_conn_pool()
+# Deletes test task rows from the BETTR_HOST's BETTR_TASK table.
+# This is done between smaller tests and after all tests are done.
+task_cleanup <- function() {
+  message("+++ task_cleanup")
+  bettr::execute_stmts(
+    connection_name = "bettr_host",
+    sql_file = "delete_test_bettr_rows"
+  )
 }
 
-withr::defer({
-  try(
-    {
-      test_cleanup(Sys.getenv("BETTR_TASK_TEST_CLEANUP_AFTER") == 1L)
-    }
+# Runs a script to drop a test table used by some of the tasks
+# that are part of testing this logic.
+# This is done when, subject to the task and test logic,
+# we need to be able to reinitialize the table without error.
+table_cleanup <- function() {
+  message("+++ table_cleanup")
+  bettr::execute_stmts(
+    connection_name = "app_dqhi_dev",
+    sql_file = "drop_bettr_task_test"
   )
-})
+}
+
+testthat::teardown(
+  {
+    task_cleanup()
+  }
+)
 
 testthat::test_that("all bettr tests pass", {
   #############################################################################
@@ -173,7 +178,8 @@ testthat::test_that("all bettr tests pass", {
   # the current test tasks and refresh with ones that will
   # process successfully.
   # Delete them now and set up a new set of tasks for testing.
-  test_cleanup()
+  task_cleanup()
+  table_cleanup()
 
   #############################################################################
   print("---------- run_next_job_in_queue runs all tasks in next job successfully")
@@ -214,27 +220,29 @@ testthat::test_that("all bettr tests pass", {
     lubridate::today() %>% format("%Y-%m-%d")
   )
 
-  test_cleanup()
+  task_cleanup()
+  table_cleanup()
 
   #############################################################################
   print("---------- run_next_job_in_queue skips jobs with only live refresh tasks")
 
   tibble::tibble(
-    bettr_task_git_project = c("bettr"),
-    bettr_task_git_branch = c("feature/task"),
-    bettr_task_name = c("task_test_update_foo"),
-    bettr_task_job_comment = c("__TEST__"),
-    bettr_task_job_priority = c(1),
+    bettr_task_git_project = "bettr",
+    bettr_task_git_branch = "feature/task",
+    bettr_task_name = "task_test_update_foo",
+    bettr_task_job_comment = "__TEST__",
+    bettr_task_job_priority = 1,
     opt_cache_expiry_mins = 10
   ) |>
     bettr::add_job_to_host()
 
   tibble::tibble(
-    bettr_task_git_project = c("bettr"),
-    bettr_task_git_branch = c("feature/task"),
-    bettr_task_name = c("task_test_before"),
-    bettr_task_job_comment = c("__TEST__"),
-    bettr_task_job_priority = c(1)
+    bettr_task_git_project = "bettr",
+    bettr_task_git_branch = "feature/task",
+    bettr_task_name = "task_test_before",
+    bettr_task_job_comment = "__TEST__",
+    bettr_task_job_priority = 1,
+    opt_cache_expiry_mins = -1
   ) |>
     bettr::add_job_to_host()
 
@@ -252,7 +260,8 @@ testthat::test_that("all bettr tests pass", {
     lubridate::today() %>% format("%Y-%m-%d")
   )
 
-  test_cleanup()
+  task_cleanup()
+  table_cleanup()
 
   #############################################################################
   print("---------- caches exhaust when all are run, and rerun after expiry")
@@ -317,6 +326,6 @@ testthat::test_that("all bettr tests pass", {
     branch = "feature/task",
     return_result = TRUE
   )
-  
+
   testthat::expect_null(task_result_4)
 })

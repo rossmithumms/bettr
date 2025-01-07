@@ -199,6 +199,15 @@ run_next_job_in_queue <- function(
     message(
       stringr::str_glue("... starting job task {i}/{nrow(next_bettr_job)} ...")
     )
+    # TODO: smarten this up and give it a spin
+    # message(
+    #   stringr::str_glue(paste(
+    #     "... starting job task {i}/{nrow(next_bettr_job)},",
+    #     "{next_bettr_job$bettr_task_name[1]}",
+    #     "({next_bettr_job$bettr_task_job_comment[1]})..."
+    #     )
+    #   )
+    # )
     task_result <- next_bettr_job %>%
       dplyr::slice(i:i) %>%
       dplyr::rename_all(snakecase::to_snake_case) %>%
