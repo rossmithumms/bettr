@@ -371,6 +371,7 @@ ensure_table <- function(rows, connection_name, table_name) {
 #'
 #' @param connection_name The snake_case name of the connection.
 #' @param table_name The snake_case name of the table to drop.
+#' @export
 exists_table <- function(connection_name, table_name) {
   tryCatch(
     {
