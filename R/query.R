@@ -77,8 +77,8 @@ get_db_name <- function(connection_name) {
 #' This function closes all database connections in the pool.
 #' @export
 close_db_conn_pool <- function() {
-  names(bettr_connection_pool) %>%
-    as.list() %>%
+  names(bettr_connection_pool) |>
+    as.list() |>
     lapply(function(connection_name) {
       message(stringr::str_glue("... closing connection {connection_name}"))
       ROracle::dbDisconnect(bettr_connection_pool[[connection_name]])
@@ -111,19 +111,42 @@ close_db_conn_pool <- function() {
 #' @return A tibble of the result set with cleaned column names.
 #' @export
 get_rows <- function(binds, connection_name, sql, suppress_bind_logging = FALSE) {
-  if (missing(binds)) {
-    get_rows_nobinds(
-      connection_name = connection_name,
-      sql = sql
-    )
-  } else {
-    get_rows_binds(
-      binds = binds,
-      connection_name = connection_name,
-      sql = sql,
-      suppress_bind_logging = suppress_bind_logging
-    )
-  }
+  tryCatch(
+    {
+      bind_colnames <- get_bind_colnames(
+        load_sql(
+          sql = sql,
+          connection_name = connection_name
+        )
+      )
+
+      if (missing(binds) || length(bind_colnames) == 0) {
+        get_rows_nobinds(
+          connection_name = connection_name,
+          sql = sql
+        )
+      } else {
+        get_rows_binds(
+          binds = binds,
+          connection_name = connection_name,
+          sql = sql,
+          suppress_bind_logging = suppress_bind_logging
+        )
+      }
+    },
+
+    warning = function(warn) {
+      warning(warn)
+    },
+
+    error = function(err) {
+      stop(err)
+    },
+
+    finally = {
+      close_db_conn_pool()
+    }
+  )
 }
 
 #' Get Rows from a Database With Bind Parameters
@@ -139,11 +162,11 @@ get_rows_binds <- function(binds, connection_name, sql, suppress_bind_logging = 
       conn <- get_db_conn(connection_name = connection_name)
       sql_statement <- load_sql(sql = sql, connection_name = connection_name)
 
-      binds %>%
-        dplyr::rename_with(toupper) %>%
-        dplyr::select(get_bind_colnames(sql_statement)) %>%
-        as.list() %>%
-        purrr::list_transpose() %>%
+      binds |>
+        dplyr::rename_with(toupper) |>
+        dplyr::select(get_bind_colnames(sql_statement)) |>
+        as.list() |>
+        purrr::list_transpose() |>
         lapply(function(row_binds) {
           message(stringr::str_glue("... querying {connection_name}: {sql}"))
           if (suppress_bind_logging == FALSE) {
@@ -160,8 +183,8 @@ get_rows_binds <- function(binds, connection_name, sql, suppress_bind_logging = 
           ROracle::dbClearResult(rs)
           message(stringr::str_glue("--- returning {dplyr::count(data)} rows"))
           data
-        }) %>%
-          data.table::rbindlist() %>%
+        }) |>
+          data.table::rbindlist() |>
           tibble::as_tibble(.name_repair = snakecase::to_snake_case)
     },
 
@@ -198,7 +221,7 @@ get_rows_nobinds <- function(connection_name, sql) {
       data <- ROracle::fetch(rs)
       ROracle::dbClearResult(rs)
       message(stringr::str_glue("--- returning {dplyr::count(data)} rows"))
-      data %>%
+      data |>
         tibble::as_tibble(.name_repair = snakecase::to_snake_case)
     },
 
@@ -248,7 +271,7 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
       ROracle::dbWriteTable(
         conn = conn,
         name = table_name,
-        value = rows %>%
+        value = rows |>
           dplyr::mutate(
             key = as.numeric(NA),
             audit_insert_dt = as.Date(NA)
@@ -260,7 +283,7 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
       )
 
       ROracle::dbCommit(conn = conn)
-      message(stringr::str_glue("+++ appended {rows %>% dplyr::count()} rows"))
+      message(stringr::str_glue("+++ appended {rows |> dplyr::count()} rows"))
     },
 
     warning = function(warn) {
@@ -316,7 +339,7 @@ ensure_table <- function(rows, connection_name, table_name) {
         ROracle::dbWriteTable(
           conn = conn,
           name = table_name,
-          value = rows %>% dplyr::slice_head(n = 1),
+          value = rows |> dplyr::slice_head(n = 1),
           schema = schema,
           row.names = FALSE,
           override = FALSE,
@@ -479,34 +502,34 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
     {
       connection_name <- toupper(connection_name)
       conn <- get_db_conn(connection_name = connection_name)
-      binds <- binds %>%
-        tibble::as_tibble() %>%
+      binds <- binds |>
+        tibble::as_tibble() |>
         dplyr::rename_with(toupper)
-      stmts <- load_sql(
+      stmts <- tibble::tibble(
+        stmt = load_sql(
           sql_file,
           connection_name = connection_name
-        ) %>%
-        stringr::str_replace_all(pattern = "[ \t\r\n]+", replacement = " ") %>%
-        stringr::str_split(pattern = ";;;") %>%
-        tibble::tibble(
-          stmt = .[[1]]
-        ) %>%
+        ) |>
+          stringr::str_replace_all(pattern = "[ \t\r\n]+", replacement = " ") |>
+          stringr::str_split(pattern = ";;;") |>
+          unlist()
+      ) |>
         dplyr::filter(
           !stringr::str_detect(stmt, "^ *$")
-        ) %>%
-        dplyr::pull() %>%
+        ) |>
+        dplyr::pull() |>
         as.list()
-      row_bind_ct <- dplyr::count(binds) %>% dplyr::pull()
+      row_bind_ct <- dplyr::count(binds) |> dplyr::pull()
 
       # Iterate over statements and excute them
-      stmts %>%
+      stmts |>
         lapply(function(stmt) {
           message(stringr::str_glue("... executing: {stmt}"))
           # If there are 0 or 1 rows of bind parameters,
           # don't iterate over them; otherwise, iterate over
           # row binds within statements (statement-major)
           if (row_bind_ct < 2) {
-            binds <- binds %>%
+            binds <- binds |>
               dplyr::select(get_bind_colnames(stmt))
             # Only log binds if there are any
             if (row_bind_ct == 1) {
@@ -529,12 +552,12 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
             # Finalize the work
             ROracle::dbCommit(conn = conn)
           } else {
-            binds %>%
-              as.list() %>%
-              purrr::list_transpose() %>%
+            binds |>
+              as.list() |>
+              purrr::list_transpose() |>
               lapply(function(row_binds) {
-                row_binds <- row_binds %>%
-                  tibble::as_tibble() %>%
+                row_binds <- row_binds |>
+                  tibble::as_tibble() |>
                   dplyr::select(get_bind_colnames(stmt))
                 if (suppress_bind_logging == FALSE) {
                   message(paste0(
@@ -610,8 +633,8 @@ generate_init_sql <- function(
 
   table_name <- toupper(table_name)
   connection_name <- toupper(connection_name)
-  col_names <- rows %>% names() %>% toupper()
-  index_columns <- index_columns %>% toupper()
+  col_names <- rows |> names() |> toupper()
+  index_columns <- index_columns |> toupper()
   if (index_id_columns) {
     index_columns <- vctrs::vec_c(
       index_columns,
@@ -639,7 +662,7 @@ generate_init_sql <- function(
       sep = ""
     )
   )
-  index_stmts <- index_columns %>%
+  index_stmts <- index_columns |>
     (\(name) {
       stringr::str_glue(
         paste0(
@@ -648,7 +671,7 @@ generate_init_sql <- function(
           collapse = ";;;\n"
         )
       )
-    })() %>%
+    })() |>
     paste0(collapse = ";;;\n")
   view_stmt <- stringr::str_glue(
     "CREATE VIEW V_{table_name} (\n  {table_name}_KEY,\n  ",
@@ -664,12 +687,12 @@ generate_init_sql <- function(
     "\",\n    AUDIT_INSERT_DT\n  FROM\n    {connection_name}.{table_name}\n)",
     sep = ""
   )
-  view_grant_stmts <- view_grants %>%
+  view_grant_stmts <- view_grants |>
     (\(grant) {
       stringr::str_glue(
         "GRANT SELECT ON V_{table_name} TO {toupper(grant)}"
       )
-    })() %>%
+    })() |>
     paste0(collapse = ";;;\n")
   init_sql <- paste(
     alter_table_stmt,
@@ -704,7 +727,7 @@ get_url_query <- function(url_query = "") {
       url_query <- session$clientData$url_search # nolint
     }
 
-    url_query %>% parseQueryString # nolint
+    url_query |> parseQueryString() # nolint
   },
 
   warning = function(warn) {
@@ -802,9 +825,10 @@ load_sql <- function(sql, connection_name) {
 #' @return A character vector of snake_cased bind parameter names to be used in dplyr verbs.
 #' @export
 get_bind_colnames <- function(sql) {
-  sql %>%
-    stringr::str_match_all("&([a-zA-Z0-9_]+)") %>%
-    data.frame %>%
-    dplyr::pull(.data$X2) %>%
-    toupper
+  sql |>
+    stringr::str_match_all("&([a-zA-Z0-9_]+)") |>
+    data.frame() |>
+    # TODO is this a thing?  Should I worry about this in my |> conversion?
+    dplyr::pull(.data$X2) |>
+    toupper()
 }

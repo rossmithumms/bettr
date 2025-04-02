@@ -29,7 +29,8 @@ table_cleanup <- function() {
   )
 }
 
-testthat::teardown(
+# 2025-04-02, testing the withr implementation of test fixtures
+withr::defer(
   {
     task_cleanup()
   }
@@ -56,14 +57,14 @@ testthat::test_that("all bettr tests pass", {
     bettr_task_git_project = "bettr",
     bettr_task_git_branch = "feature/task",
     incl_live_refresh = 1
-  ) %>%
+  ) |>
     bettr::get_rows(
       connection_name = "bettr_host",
       sql = "get_next_bettr_task"
     )
 
   testthat::expect_equal(
-    bettr_task %>% dplyr::count() %>% as.double(), 3
+    bettr_task |> dplyr::count() |> as.double(), 3
   )
 
   testthat::expect_equal(
@@ -85,14 +86,14 @@ testthat::test_that("all bettr tests pass", {
     bettr_task_git_project = "bettr",
     bettr_task_git_branch = "feature/task",
     incl_live_refresh = 1
-  ) %>%
+  ) |>
     bettr::get_rows(
       connection_name = "bettr_host",
       sql = "get_next_bettr_job"
     )
 
   testthat::expect_equal(
-    bettr_job %>% dplyr::count() %>% as.double(), 3
+    bettr_job |> dplyr::count() |> as.double(), 3
   )
 
   testthat::expect_equal(
@@ -128,14 +129,14 @@ testthat::test_that("all bettr tests pass", {
   )
 
   # Generate a result report JSON manually
-  expected_json <- task_result$rs_result$result$value %>%
-    jsonlite::toJSON() %>%
+  expected_json <- task_result$rs_result$result$value |>
+    jsonlite::toJSON() |>
     as.character()
 
   # Make sure the result is similarly stored on the task row
   task_from_db <- tibble::tibble(
     bettr_task_key = task_result$bettr_task$bettr_task_key
-  ) %>%
+  ) |>
     bettr::get_rows(
       connection_name = "bettr_host",
       sql = "get_bettr_task_by_id"
@@ -153,11 +154,11 @@ testthat::test_that("all bettr tests pass", {
     sql = "get_bettr_task_test"
   )
 
-  testthat::expect_equal(task_test_rows$foo[1] %>% as.double(), 1)
-  testthat::expect_equal(task_test_rows$bar[1] %>% as.double(), 2)
+  testthat::expect_equal(task_test_rows$foo[1] |> as.double(), 1)
+  testthat::expect_equal(task_test_rows$bar[1] |> as.double(), 2)
   testthat::expect_equal(
-    task_test_rows$current_dt[1] %>% format("%Y-%m-%d"),
-    lubridate::today() %>% format("%Y-%m-%d")
+    task_test_rows$current_dt[1] |> format("%Y-%m-%d"),
+    lubridate::today() |> format("%Y-%m-%d")
   )
 
   # task_test_error_during
@@ -213,11 +214,11 @@ testthat::test_that("all bettr tests pass", {
     sql = "get_bettr_task_test"
   )
 
-  testthat::expect_equal(task_test_rows$foo[1] %>% as.double(), 3)
-  testthat::expect_equal(task_test_rows$bar[1] %>% as.double(), 2)
+  testthat::expect_equal(task_test_rows$foo[1] |> as.double(), 3)
+  testthat::expect_equal(task_test_rows$bar[1] |> as.double(), 2)
   testthat::expect_equal(
-    task_test_rows$current_dt[1] %>% format("%Y-%m-%d"),
-    lubridate::today() %>% format("%Y-%m-%d")
+    task_test_rows$current_dt[1] |> format("%Y-%m-%d"),
+    lubridate::today() |> format("%Y-%m-%d")
   )
 
   task_cleanup()
@@ -253,11 +254,11 @@ testthat::test_that("all bettr tests pass", {
     sql = "get_bettr_task_test"
   )
 
-  testthat::expect_equal(task_test_rows$foo[1] %>% as.double(), 1)
-  testthat::expect_equal(task_test_rows$bar[1] %>% as.double(), 2)
+  testthat::expect_equal(task_test_rows$foo[1] |> as.double(), 1)
+  testthat::expect_equal(task_test_rows$bar[1] |> as.double(), 2)
   testthat::expect_equal(
-    task_test_rows$current_dt[1] %>% format("%Y-%m-%d"),
-    lubridate::today() %>% format("%Y-%m-%d")
+    task_test_rows$current_dt[1] |> format("%Y-%m-%d"),
+    lubridate::today() |> format("%Y-%m-%d")
   )
 
   task_cleanup()
@@ -275,7 +276,7 @@ testthat::test_that("all bettr tests pass", {
     opt_cache_expiry_mins = c(-1, 1, -1)
   )
 
-  added_tasks %>% bettr::add_job_to_host()
+  added_tasks |> bettr::add_job_to_host()
 
   # Run the first two tasks immediately; keep the 2nd result for testing
   bettr::run_next_task_in_queue(
@@ -328,4 +329,13 @@ testthat::test_that("all bettr tests pass", {
   )
 
   testthat::expect_null(task_result_4)
+
+  # TODO write unit tests for your new function
+  # bettr::get_bettr_tasks_by_criteria, fool
+  #############################################################################
+  print("---------- querying for tasks by criteria succeeds in all cases")
+
+  testthat::expect_true(FALSE)
 })
+
+withr::deferred_run()

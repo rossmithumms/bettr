@@ -1,6 +1,6 @@
 Package: bettr
 Title: Simpler Tidy Oracle Queries and R Shiny Helpers
-Version: 1.0.1.26
+Version: 1.0.1.27
 Authors@R: 
     person("Ross", "Smith", , "rossmith@med.umich.edu", role = c("aut", "cre"),
            comment = c(ORCID = "YOUR-ORCID-ID"))
@@ -13,7 +13,6 @@ Imports:
     readr (== 2.1.4),
     stringr (== 1.5.0),
     lubridate (== 1.9.2),
-    magrittr (== 2.0.3),
     tibble (== 3.2.1),
     data.table (== 1.14.8),
     ROracle (>= 1.3.1),

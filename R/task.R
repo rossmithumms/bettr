@@ -111,26 +111,26 @@ add_job_to_host <- function(bettr_tasks) {
 
       # Apply a default sort if necessary
       if (!c("bettr_task_sort") %in% names(bettr_tasks)) {
-        bettr_tasks <- bettr_tasks %>%
+        bettr_tasks <- bettr_tasks |>
           dplyr::mutate(
             bettr_task_sort = dplyr::row_number()
           )
       }
 
       # Apply the next available job ID
-      bettr_tasks <- bettr_tasks %>%
+      bettr_tasks <- bettr_tasks |>
         dplyr::mutate(
           bettr_task_job_id = get_rows(
             connection_name = "bettr_host",
             sql = "get_next_bettr_job_id"
-          ) %>%
-            dplyr::pull() %>%
+          ) |>
+            dplyr::pull() |>
             as.numeric()
         )
 
       # Apply simple defaults and send them to the host
-      bettr_tasks %>%
-        apply_bettr_task_defaults() %>%
+      bettr_tasks |>
+        apply_bettr_task_defaults() |>
         append_rows(
           connection_name = "bettr_host",
           table_name = "bettr_task"
@@ -183,12 +183,12 @@ run_next_job_in_queue <- function(
     incl_live_refresh = dplyr::if_else(
       incl_live_refresh, 1, 0
     )
-  ) %>% get_rows(
+  ) |> get_rows(
     connection_name = "bettr_host",
     sql = "get_next_bettr_job"
   )
 
-  if (next_bettr_job %>% dplyr::count() == 0) {
+  if (next_bettr_job |> dplyr::count() == 0) {
     message("... No next job found, exiting")
     return()
   }
@@ -208,9 +208,9 @@ run_next_job_in_queue <- function(
     #     )
     #   )
     # )
-    task_result <- next_bettr_job %>%
-      dplyr::slice(i:i) %>%
-      dplyr::rename_all(snakecase::to_snake_case) %>%
+    task_result <- next_bettr_job |>
+      dplyr::slice(i:i) |>
+      dplyr::rename_all(snakecase::to_snake_case) |>
       run_task()
 
     error <- ""
@@ -222,13 +222,13 @@ run_next_job_in_queue <- function(
           "{task_result$rs_result$error$parent$message}",
           sep = "\n"
         )
-      ) %>%
+      ) |>
         as.character()
     }
 
-    task_results <- task_results %>%
+    task_results <- task_results |>
       dplyr::bind_rows(
-        task_result$bettr_task %>%
+        task_result$bettr_task |>
           dplyr::mutate(
             run_code = task_result$rs_result$code,
             run_stdout = task_result$rs_result$stdout,
@@ -294,19 +294,19 @@ run_next_task_in_queue <- function(
     incl_live_refresh = dplyr::if_else(
       incl_live_refresh, 1, 0
     )
-  ) %>% get_rows(
+  ) |> get_rows(
     connection_name = "bettr_host",
     sql = "get_next_bettr_task"
   )
 
-  if (next_bettr_task %>% dplyr::count() == 0) {
+  if (next_bettr_task |> dplyr::count() == 0) {
     message("... No next task found, exiting")
     return()
   }
 
-  task_result <- next_bettr_task %>%
-    dplyr::slice_head(n = 1) %>%
-    dplyr::rename_all(snakecase::to_snake_case) %>%
+  task_result <- next_bettr_task |>
+    dplyr::slice_head(n = 1) |>
+    dplyr::rename_all(snakecase::to_snake_case) |>
     run_task()
 
   if (!suppress_logging) {
@@ -335,12 +335,18 @@ run_task <- function(
   hb_timeout = 10000L
 ) {
 
-  if (is.null(bettr_task) || bettr_task %>% dplyr::count() != 1) {
+  if (is.null(bettr_task) || bettr_task |> dplyr::count() != 1) {
     stop("!!! run_task() requires exactly 1 bettr_task")
   }
 
   rs_task <- init_task_session(bettr_task = bettr_task)
   rs_hb <- callr::r_session$new(wait = TRUE)
+
+  message(
+    stringr::str_glue(
+      "... starting task {bettr_task$bettr_task_name[1]}"
+    )
+  )
 
   on.exit({
     message("... run_task(): closing R task and heartbeat sessions")
@@ -375,7 +381,7 @@ run_task <- function(
         }
       )
       state <- "timeout"
-      # TODO prepare the heartbeat session with the global vars that
+      # Prepare the heartbeat session with the global vars that
       # do_heartbeat will need for execution
       rs_hb$run(func = \(bettr_task_key, last_task_started_dt, bettr_task_git_commit) {
           hb_args <<- list(
@@ -458,8 +464,8 @@ resolve_rs_task_result <- function(rs_task, rs_hb, bettr_task) {
       if (!is.null(result$error)) {
         message("!!! Task generated an error; marking status as failed")
         last_status <- 20
-        last_error <- result$error %>%
-          as.character() %>%
+        last_error <- result$error |>
+          as.character() |>
           stringr::str_sub(start = 1L, end = 3999L)
       }
 
@@ -475,7 +481,7 @@ resolve_rs_task_result <- function(rs_task, rs_hb, bettr_task) {
 
       list(
         rs_result = result,
-        bettr_task = bettr_task %>%
+        bettr_task = bettr_task |>
           dplyr::mutate(
             last_status = last_status,
             last_error = last_error
@@ -515,14 +521,14 @@ submit_task_report <- function(bettr_task_key, last_report = NULL) {
     report_json <- "{}"
   }
 
-  if (report_json %>% length() > 4000) {
+  if (report_json |> length() > 4000) {
     report_json <- "{ json_error: \"!!! report exceeded 4000 characters\" }"
   }
 
   tibble::tibble(
     bettr_task_key = bettr_task_key,
     last_report = report_json
-  ) %>%
+  ) |>
     bettr::execute_stmts(
       connection_name = "bettr_host",
       sql_file = "update_bettr_task_last_report"
@@ -535,7 +541,7 @@ submit_task_report <- function(bettr_task_key, last_report = NULL) {
 #'
 #' Initializes the task table, if it is missing.
 init_bettr_host <- function() {
-  get_bettr_task_defaults() %>%
+  get_bettr_task_defaults() |>
     ensure_table(
       connection_name = "bettr_host",
       table_name = "bettr_task"
@@ -556,10 +562,10 @@ init_task_session <- function(bettr_task) {
 
   tryCatch(
     {
-      bettr_task <- bettr_task %>%
+      bettr_task <- bettr_task |>
         dplyr::slice_head(n = 1)
 
-      bettr_task_name <- bettr_task$bettr_task_name[1] %>%
+      bettr_task_name <- bettr_task$bettr_task_name[1] |>
         snakecase::to_snake_case()
 
       # I don't feel great about burying this constant,
@@ -627,6 +633,7 @@ init_task_session <- function(bettr_task) {
 }
 
 #' Asserts a Bettr Task Has Needed Columns
+#' @return The passed tasks to allow piping.
 #' @export
 assert_valid_bettr_tasks <- function(
   bettr_tasks = tibble::tibble(),
@@ -651,7 +658,7 @@ assert_valid_bettr_tasks <- function(
     )
   }
 
-  if (invalid_cols_found %>% length() > 0) {
+  if (invalid_cols_found |> length() > 0) {
     error_message <- paste(
       error_message,
       "\nFound invalid columns: ",
@@ -672,6 +679,198 @@ assert_valid_bettr_tasks <- function(
   bettr_tasks
 }
 
+#' Asserts the Status of a Task on the Host
+#'
+#' Looks for exactly 1 task on the BETTR_HOST that
+#' matches the criteria given by `bettr_task`.
+#' This is intended to allow tasks to verify that
+#' a different task providing data for this one
+#' has already executed successfully on the host, even if
+#' that task is from a different project.
+#' For more information on this argument, see the
+#' definition for `bettr::get_bettr_tasks_by_attributes()`.
+#' Be aware that `bettr_task_git_project`, `bettr_task_name`,
+#' and `last_status` are required on `bettr_task`.
+#' @param bettr_task Required.  A partial definition
+#' of a `bettr_task` used as a filter for
+#' finding exactly 1 matching task in BETTR_HOST.
+#' @return TRUE if a single matching row is found;
+#' throws an error in all other cases.
+#' @export
+assert_task_status <- function(bettr_task) {
+
+  # Ensure all required fields on bettr_task are provided
+  missing_cols <- setdiff(
+    c("bettr_task_git_project", "bettr_task_name", "last_status"),
+    colnames(bettr_task)
+  )
+
+  if (length(missing_cols) > 0) {
+    stop(
+      paste(
+        "!!! bettr::assert_task_status failed; required columns missing: ",
+        missing_cols,
+        sep = "\n"
+      )
+    )
+  }
+
+  task_results <- get_bettr_tasks_by_criteria(bettr_task)
+
+  bettr_task_str <- bettr_task |>
+    # Format dates to YYYY-MM-DD HH24:MI:SS strings
+    dplyr::mutate(
+      opt_start_dt = dplyr::case_when(
+        is.na(opt_start_dt) ~ as.character(NA),
+        TRUE ~ format(opt_start_dt, "%Y-%m-%d %H:%M:%S")
+      ),
+      opt_end_dt = dplyr::case_when(
+        is.na(opt_end_dt) ~ as.character(NA),
+        TRUE ~ format(opt_end_dt, "%Y-%m-%d %H:%M:%S")
+      )
+    ) |>
+    # Format all other values to strings
+    dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
+
+  bettr_task_str <- paste0(
+    stringr::str_glue(
+      "{colnames(bettr_task)}: {bettr_task_str}"
+    ),
+    collapse = "\n"
+  )
+
+  results_found_str <- stringr::str_glue(
+    "... {dplyr::count(task_results)} results found"
+  )
+
+  if (task_results |> dplyr::count() |> as.double() != 1L) {
+    stop(
+      paste(
+        "!!! bettr::assert_task_status failed: ",
+        bettr_task_str,
+        results_found_str,
+        sep = "\n"
+      )
+    )
+  } else {
+    message(
+      paste(
+        "+++ bettr::assert_task_status succeeded: ",
+        bettr_task_str,
+        results_found_str,
+        sep = "\n"
+      )
+    )
+  }
+
+  TRUE
+}
+
+#' Inspect Tasks on the Host
+#'
+#' DO NOT USE THIS FUNCTION UNLESS YOU ARE EXTREMELY
+#' SURE YOU KNOW WHAT YOU ARE DOING.  It is possible
+#' to lock the state of the BETTR_HOST, causing
+#' all data extract jobs on the host to stop.  If you
+#' don't know how to avoid that, avoid this function.
+#'
+#' Returns a list of tasks on the BETTR_HOST that
+#' meet the criteria given by `bettr_tasks`.  This
+#' can have multiple rows; each row queries the
+#' BETTR_HOST separately.  Results of each execution
+#' are returned in a union.
+#' @param bettr_tasks Required.  A tibble with
+#' one or more row of query criteria.  All values
+#' are optional, but at least one must be provided.
+#' Accepted filter columns and their match method:
+#'
+#' - `bettr_task_git_project`: Regex pattern.
+#' - `bettr_task_job_comment`: Regex pattern.
+#' - `bettr_task_name`: Regex pattern.
+#' - `opt_start_dt`: LTE.
+#' - `opt_end_dt`: GTE.
+#' - `opt_cache_expiry_mins`: Negative/zero or positive.
+#' - `opt_number_list`: Regex pattern.
+#' - `opt_char_list`: Regex pattern.
+#' - `last_status`: Regex pattern.
+#' - `last_error`: Regex pattern.
+#' @export
+get_bettr_tasks_by_criteria <- function(bettr_tasks) {
+  tryCatch(
+    {
+      bettr_task_args <- bettr_tasks |>
+        # Apply default values
+        apply_bettr_task_defaults() |>
+        # Ensure this object is valid
+        assert_valid_bettr_tasks() |>
+        # Select the columns used for matching
+        dplyr::select(
+          bettr_task_git_project,
+          bettr_task_job_comment,
+          bettr_task_name,
+          opt_start_dt,
+          opt_end_dt,
+          opt_cache_expiry_mins,
+          opt_number_list,
+          opt_char_list,
+          last_status,
+          last_error
+        ) |>
+        # Format dates to YYYY-MM-DD HH24:MI:SS strings
+        dplyr::mutate(
+          opt_start_dt = dplyr::case_when(
+            is.na(opt_start_dt) ~ as.character(NA),
+            TRUE ~ format(opt_start_dt, "%Y-%m-%d %H:%M:%S")
+          ),
+          opt_end_dt = dplyr::case_when(
+            is.na(opt_end_dt) ~ as.character(NA),
+            TRUE ~ format(opt_end_dt, "%Y-%m-%d %H:%M:%S")
+          )
+        ) |>
+        # Format all other values to strings
+        dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
+
+      task_results <- bettr_task_args |>
+        get_rows(
+          connection_name = "BETTR_HOST",
+          sql = "get_bettr_tasks_by_attributes"
+        )
+
+      # 2025-04-02
+      # Some pretty-printing code if needed for debugging.
+      # bettr_task_args_str <- paste0(
+      #   stringr::str_glue(
+      #     "{colnames(bettr_task_args)}: {bettr_task_args}"
+      #   ),
+      #   collapse = "\n"
+      # )
+      # rs_found_str <- stringr::str_glue(
+      #   "... {dplyr::count(task_results)} results found"
+      # )
+      # task_results_str <- task_results |>
+      #   dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
+      # task_results_str <- paste0(
+      #     stringr::str_glue(
+      #       "{colnames(task_results_str)}: {task_results_str}"
+      #     ),
+      #     collapse = "\n"
+      #   )
+      # message("... task_results_str: ")
+      # message(task_results_str)
+
+      task_results
+    },
+    error = \(err) {
+      stop(err)
+    },
+    warning = \(warn) {
+      warning(warn)
+    },
+    finally = {
+    }
+  )
+}
+
 #' Apply Default Values to Bettr Task
 #'
 #' Given one or more bettr_tasks, this function takes
@@ -680,23 +879,27 @@ assert_valid_bettr_tasks <- function(
 #' is missing.
 #' @return The input bettr_tasks with default values
 #' for all unspecified columns or NA values.
+#' @export
 apply_bettr_task_defaults <- function(bettr_tasks) {
   assert_valid_bettr_tasks(bettr_tasks)
   defaults <- get_bettr_task_defaults()
-  defaults %>%
-    dplyr::full_join(bettr_tasks, by = names(bettr_tasks)) %>%
+  defaults |>
+    dplyr::full_join(bettr_tasks, by = names(bettr_tasks)) |>
     dplyr::mutate(
       dplyr::across(
         dplyr::everything(),
-        ~dplyr::coalesce(
-          .,
-          dplyr::pull(
-            defaults %>% dplyr::select(dplyr::cur_column())
+        \(x) {
+          dplyr::coalesce(
+            # TODO Fix this...
+            x,
+            dplyr::pull(
+              defaults |> dplyr::select(dplyr::cur_column())
+            )
           )
-        )
+        }
       ),
       .keep = "unused"
-    ) %>%
+    ) |>
     dplyr::filter(
       bettr_task_name != "__BETTR_DEFAULTS__"
     )

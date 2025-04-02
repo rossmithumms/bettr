@@ -6,6 +6,9 @@
 \usage{
 assert_valid_bettr_tasks(bettr_tasks = tibble::tibble(), cols = c())
 }
+\value{
+The passed tasks to allow piping.
+}
 \description{
 Asserts a Bettr Task Has Needed Columns
 }
