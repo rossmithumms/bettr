@@ -173,8 +173,6 @@ testthat::test_that("all bettr tests pass", {
     sql = "get_failed_bettr_tasks"
   )
 
-  # TODO verify that task_result's error matches task_failures
-
   # Because this task is designed to fail, we need to clean out
   # the current test tasks and refresh with ones that will
   # process successfully.
@@ -329,13 +327,6 @@ testthat::test_that("all bettr tests pass", {
   )
 
   testthat::expect_null(task_result_4)
-
-  # TODO write unit tests for your new function
-  # bettr::get_bettr_tasks_by_criteria, fool
-  #############################################################################
-  print("---------- querying for tasks by criteria succeeds in all cases")
-
-  testthat::expect_true(FALSE)
 })
 
 withr::deferred_run()

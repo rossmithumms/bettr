@@ -779,6 +779,7 @@ assert_task_status <- function(bettr_task) {
 #' can have multiple rows; each row queries the
 #' BETTR_HOST separately.  Results of each execution
 #' are returned in a union.
+#' 
 #' @param bettr_tasks Required.  A tibble with
 #' one or more row of query criteria.  All values
 #' are optional, but at least one must be provided.
@@ -798,23 +799,25 @@ assert_task_status <- function(bettr_task) {
 get_bettr_tasks_by_criteria <- function(bettr_tasks) {
   tryCatch(
     {
-      bettr_task_args <- bettr_tasks |>
-        # Apply default values
-        apply_bettr_task_defaults() |>
-        # Ensure this object is valid
-        assert_valid_bettr_tasks() |>
-        # Select the columns used for matching
+      # Declare default values for search
+      bettr_task_args <- tibble::tibble(
+        bettr_task_git_project = as.character(NA),
+        bettr_task_job_comment = as.character(NA),
+        bettr_task_name = as.character(NA),
+        opt_start_dt = as.POSIXct(NA),
+        opt_end_dt = as.POSIXct(NA),
+        opt_cache_expiry_mins = as.character(NA),
+        opt_number_list = as.character(NA),
+        opt_char_list = as.character(NA),
+        last_status = as.character(NA),
+        last_error = as.character(NA)
+      ) |>
+        # Cross-join with input to fill missing values
         dplyr::select(
-          bettr_task_git_project,
-          bettr_task_job_comment,
-          bettr_task_name,
-          opt_start_dt,
-          opt_end_dt,
-          opt_cache_expiry_mins,
-          opt_number_list,
-          opt_char_list,
-          last_status,
-          last_error
+          -c(colnames(bettr_tasks))
+        ) |>
+        dplyr::cross_join(
+          bettr_tasks
         ) |>
         # Format dates to YYYY-MM-DD HH24:MI:SS strings
         dplyr::mutate(
@@ -828,12 +831,19 @@ get_bettr_tasks_by_criteria <- function(bettr_tasks) {
           )
         ) |>
         # Format all other values to strings
-        dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
+        dplyr::mutate(dplyr::across(dplyr::everything(), as.character)) |>
+        # Append unit test check flag from environment
+        dplyr::mutate(
+          bettr_lib_test_mode = dplyr::if_else(
+            Sys.getenv("__BETTR_LIB_TEST_MODE") == "Y",
+            1, 0
+          )
+        )
 
       task_results <- bettr_task_args |>
         get_rows(
           connection_name = "BETTR_HOST",
-          sql = "get_bettr_tasks_by_attributes"
+          sql = "get_bettr_tasks_by_criteria"
         )
 
       # 2025-04-02
@@ -904,3 +914,4 @@ apply_bettr_task_defaults <- function(bettr_tasks) {
       bettr_task_name != "__BETTR_DEFAULTS__"
     )
 }
+
