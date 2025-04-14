@@ -282,6 +282,9 @@ run_next_job_in_queue <- function(
 #' @param incl_live_refresh Boolean Indicates whether live
 #' refresh tasks (with an opt_expiry_cache_mins > -1) should
 #' be considered for the next job.  Defaults to TRUE.
+#' @param incl_historical_refresh Boolean Indicates whether historical
+#' refresh tasks (with an opt_expiry_cache_mins <= -1) should
+#' be considered for the next job.  Defaults to TRUE.
 #' @param return_result Boolean Indicates whether results
 #' should be returned.  Result objects are useful for
 #' debugging bug clutter up the job server log files.
@@ -293,6 +296,7 @@ run_next_task_in_queue <- function(
   project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
   branch = Sys.getenv("BETTR_TASK_GIT_BRANCH"),
   incl_live_refresh = TRUE,
+  incl_historical_refresh = TRUE,
   return_result = FALSE,
   suppress_logging = FALSE) {
   next_bettr_task <- tibble::tibble(
@@ -300,6 +304,9 @@ run_next_task_in_queue <- function(
     bettr_task_git_branch = branch,
     incl_live_refresh = dplyr::if_else(
       incl_live_refresh, 1, 0
+    ),
+    incl_historical_refresh = dplyr::if_else(
+      incl_historical_refresh, 1, 0
     )
   ) |> get_rows(
     connection_name = "bettr_host",

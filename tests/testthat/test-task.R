@@ -56,7 +56,8 @@ testthat::test_that("all bettr tests pass", {
   bettr_task <- tibble::tibble(
     bettr_task_git_project = "bettr",
     bettr_task_git_branch = "feature/task",
-    incl_live_refresh = 1
+    incl_live_refresh = 1,
+    incl_historical_refresh = 1
   ) |>
     bettr::get_rows(
       connection_name = "bettr_host",
