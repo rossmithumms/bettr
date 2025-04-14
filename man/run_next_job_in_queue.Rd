@@ -8,6 +8,7 @@ run_next_job_in_queue(
   project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
   branch = Sys.getenv("BETTR_TASK_GIT_BRANCH"),
   incl_live_refresh = TRUE,
+  incl_historical_refresh = TRUE,
   return_result = FALSE,
   suppress_logging = FALSE
 )
@@ -21,6 +22,10 @@ to filter for eligible jobs.}
 
 \item{incl_live_refresh}{Boolean Indicates whether live
 refresh tasks (with an opt_expiry_cache_mins > -1) should
+be considered for the next job.  Defaults to TRUE.}
+
+\item{incl_historical_refresh}{Boolean Indicates whether historical
+refresh tasks (with an opt_expiry_cache_mins <= -1) should
 be considered for the next job.  Defaults to TRUE.}
 
 \item{return_result}{Boolean Indicates whether results

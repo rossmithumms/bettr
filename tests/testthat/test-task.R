@@ -85,7 +85,8 @@ testthat::test_that("all bettr tests pass", {
   bettr_job <- tibble::tibble(
     bettr_task_git_project = "bettr",
     bettr_task_git_branch = "feature/task",
-    incl_live_refresh = 1
+    incl_live_refresh = 1,
+    incl_historical_refresh = 1
   ) |>
     bettr::get_rows(
       connection_name = "bettr_host",
@@ -223,7 +224,7 @@ testthat::test_that("all bettr tests pass", {
   table_cleanup()
 
   #############################################################################
-  print("---------- run_next_job_in_queue skips jobs with only live refresh tasks")
+  print("---------- run_next_job_in_queue only returns historical tasks")
 
   tibble::tibble(
     bettr_task_git_project = "bettr",
@@ -246,6 +247,46 @@ testthat::test_that("all bettr tests pass", {
     bettr::add_job_to_host()
 
   bettr::run_next_job_in_queue(incl_live_refresh = FALSE)
+
+  task_test_rows <- bettr::get_rows(
+    connection_name = "app_dqhi_dev",
+    sql = "get_bettr_task_test"
+  )
+
+  testthat::expect_equal(task_test_rows$foo[1] |> as.double(), 1)
+  testthat::expect_equal(task_test_rows$bar[1] |> as.double(), 2)
+  testthat::expect_equal(
+    task_test_rows$current_dt[1] |> format("%Y-%m-%d"),
+    lubridate::today() |> format("%Y-%m-%d")
+  )
+
+  task_cleanup()
+  table_cleanup()
+
+  #############################################################################
+  print("---------- run_next_job_in_queue only returns live tasks")
+  tibble::tibble(
+
+    bettr_task_git_project = "bettr",
+    bettr_task_git_branch = "feature/task",
+    bettr_task_name = "task_test_update_foo",
+    bettr_task_job_comment = "__TEST__",
+    bettr_task_job_priority = 1,
+    opt_cache_expiry_mins = -1
+  ) |>
+    bettr::add_job_to_host()
+
+  tibble::tibble(
+    bettr_task_git_project = "bettr",
+    bettr_task_git_branch = "feature/task",
+    bettr_task_name = "task_test_before",
+    bettr_task_job_comment = "__TEST__",
+    bettr_task_job_priority = 1,
+    opt_cache_expiry_mins = 10
+  ) |>
+    bettr::add_job_to_host()
+
+  bettr::run_next_job_in_queue(incl_historical_refresh = FALSE)
 
   task_test_rows <- bettr::get_rows(
     connection_name = "app_dqhi_dev",
