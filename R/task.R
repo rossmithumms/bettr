@@ -760,14 +760,10 @@ assert_task_status <- function(bettr_task) {
     collapse = "\n"
   )
 
-  results_found_str <- stringr::str_glue(
-    "... {dplyr::count(task_results)} results found"
-  )
-
   if (task_results |> dplyr::count() |> as.double() == 0) {
     stop(
       paste(
-        "!!! bettr::assert_task_status failed, no matches: ",
+        "!!! bettr::assert_task_status failed, no matches for criteria: ",
         bettr_task_str,
         sep = "\n"
       )
@@ -783,13 +779,32 @@ assert_task_status <- function(bettr_task) {
       )
     }
 
+    task_latest_str <- task_latest_result |>
+      # Format dates to YYYY-MM-DD HH24:MI:SS strings
+      dplyr::mutate(
+        dplyr::across(tidyr::ends_with("_dt"), \(x) {
+          dplyr::case_when(
+            is.na(x) ~ as.character(NA),
+            TRUE ~ format(x, "%Y-%m-%d %H:%M:%S")
+          )
+        })
+      ) |>
+      # Format all other values to strings
+      dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
+
+    task_latest_str <- paste0(
+      stringr::str_glue(
+        "{colnames(task_latest_result)}: {task_latest_str}"
+      ),
+      collapse = "\n"
+    )
+
     if (task_latest_result$last_status[1] != bettr_task$last_status[1]) {
       stop(
         paste(
-          "+++ bettr::assert_task_status failed, latest status mismatch",
+          "!!! bettr::assert_task_status failed, latest status mismatch",
           stringr::str_glue("(expected {bettr_task$last_status[1]}): "),
-          bettr_task_str,
-          results_found_str,
+          task_latest_str,
           sep = "\n"
         )
       )
@@ -799,8 +814,7 @@ assert_task_status <- function(bettr_task) {
       message(
         paste(
           "+++ bettr::assert_task_status succeeded: ",
-          bettr_task_str,
-          results_found_str,
+          task_latest_str,
           sep = "\n"
         )
       )
