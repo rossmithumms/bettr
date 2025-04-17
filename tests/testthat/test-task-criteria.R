@@ -325,7 +325,7 @@ testthat::test_that("all bettr::get_bettr_tasks_by_criteria() queries pass", {
 
   #############################################################################
   print("---------- testing bettr::assert_task_status()")
-  # TODO Ensure exactly 1 task is returned with status as expected
+  # Assert succeeds, 1 matching task in data set
   assert_rs <- bettr::assert_task_status(
     tibble::tibble(
       bettr_task_git_project = "__bt_etl-cp",
@@ -338,7 +338,7 @@ testthat::test_that("all bettr::get_bettr_tasks_by_criteria() queries pass", {
 
   testthat::expect_true(assert_rs)
 
-  # TODO ensure that a failed assert fails
+  # Assert fails, no matching tasks in data set
   tryCatch({
     assert_rs <- bettr::assert_task_status(
       tibble::tibble(
@@ -350,12 +350,77 @@ testthat::test_that("all bettr::get_bettr_tasks_by_criteria() queries pass", {
       )
     )
 
+    # This should never run; the error stops it
     testthat::expect_true(FALSE)
   },
   error = \(err) {
     message("+++ bettr::assert_task_status() errored successfully")
     testthat::expect_true(TRUE)
   })
+
+  # Assert succeeds, 2 matching tasks in dataset
+  # (In this case, last ran failed; first ran succeeded)
+  did_warn <<- FALSE
+
+  tryCatch(
+    {
+      assert_rs <- bettr::assert_task_status(
+        tibble::tibble(
+          bettr_task_git_project = "__bt_etl-phlebotomy",
+          bettr_task_name = "init_configs",
+          last_status = "20"
+        )
+      )
+    },
+
+    warning = \(warn) {
+      message("+++ bettr::assert_task_status() warned successfully")
+      did_warn <<- TRUE
+    },
+
+    error = \(err) {
+      message(err)
+      message("!!! Marking expectation as failed")
+      testthat::expect_true(FALSE)
+    },
+
+    finally = {
+      testthat::expect_true(did_warn)
+    }
+  )
+
+  # Assert fails, 2 matching tasks in dataset
+  # (In this case, last ran succeeded; first never started)
+  did_warn <<- FALSE
+
+  tryCatch(
+    {
+      assert_rs <- bettr::assert_task_status(
+        tibble::tibble(
+          bettr_task_git_project = "__bt_etl-phlebotomy",
+          bettr_task_name = "get_wiw_data",
+          last_status = "0"
+        )
+      )
+
+      # This should never run; the error stops it
+      testthat::expect_true(FALSE)
+    },
+
+    warning = \(warn) {
+      message("+++ bettr::assert_task_status() warned successfully")
+      did_warn <<- TRUE
+    },
+
+    error = \(err) {
+      message("+++ bettr::assert_task_status() errored successfully")
+      testthat::expect_true(TRUE)
+    },
+
+    finally = {
+      testthat::expect_true(did_warn)
+    }
+  )
 })
 
 withr::deferred_run()

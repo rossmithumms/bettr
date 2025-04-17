@@ -19,9 +19,15 @@ throws an error in all other cases.
 Looks for exactly 1 task on the BETTR_HOST that
 matches the criteria given by \code{bettr_task}.
 This is intended to allow tasks to verify that
-a different task providing data for this one
-has already executed successfully on the host, even if
-that task is from a different project.
+the most recent execution of different task matching
+the attributes, one that provides data for the caller,
+has already executed successfully on the host.
+The logic determines "most recent execution" by sorting
+on the LAST_STARTED_DT and taking the most recently
+started task as the candidate.
+Finding more than one candidate task is a sign of
+duplicative ETL work, and while not an error, will
+generate a warning that the task table needs review.
 For more information on this argument, see the
 definition for \code{bettr::get_bettr_tasks_by_attributes()}.
 Be aware that \code{bettr_task_git_project}, \code{bettr_task_name},

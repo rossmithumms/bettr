@@ -698,9 +698,15 @@ assert_valid_bettr_tasks <- function(
 #' Looks for exactly 1 task on the BETTR_HOST that
 #' matches the criteria given by `bettr_task`.
 #' This is intended to allow tasks to verify that
-#' a different task providing data for this one
-#' has already executed successfully on the host, even if
-#' that task is from a different project.
+#' the most recent execution of different task matching
+#' the attributes, one that provides data for the caller,
+#' has already executed successfully on the host.
+#' The logic determines "most recent execution" by sorting
+#' on the LAST_STARTED_DT and taking the most recently
+#' started task as the candidate.
+#' Finding more than one candidate task is a sign of
+#' duplicative ETL work, and while not an error, will
+#' generate a warning that the task table needs review.
 #' For more information on this argument, see the
 #' definition for `bettr::get_bettr_tasks_by_attributes()`.
 #' Be aware that `bettr_task_git_project`, `bettr_task_name`,
@@ -729,19 +735,20 @@ assert_task_status <- function(bettr_task) {
     )
   }
 
-  task_results <- get_bettr_tasks_by_criteria(bettr_task)
+  # Find all results regardless of last status
+  task_results <- get_bettr_tasks_by_criteria(
+    bettr_task |> dplyr::select(-c(last_status))
+  )
 
   bettr_task_str <- bettr_task |>
     # Format dates to YYYY-MM-DD HH24:MI:SS strings
     dplyr::mutate(
-      opt_start_dt = dplyr::case_when(
-        is.na(opt_start_dt) ~ as.character(NA),
-        TRUE ~ format(opt_start_dt, "%Y-%m-%d %H:%M:%S")
-      ),
-      opt_end_dt = dplyr::case_when(
-        is.na(opt_end_dt) ~ as.character(NA),
-        TRUE ~ format(opt_end_dt, "%Y-%m-%d %H:%M:%S")
-      )
+      dplyr::across(tidyr::ends_with("_dt"), \(x) {
+        dplyr::case_when(
+          is.na(x) ~ as.character(NA),
+          TRUE ~ format(x, "%Y-%m-%d %H:%M:%S")
+        )
+      })
     ) |>
     # Format all other values to strings
     dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
@@ -757,24 +764,47 @@ assert_task_status <- function(bettr_task) {
     "... {dplyr::count(task_results)} results found"
   )
 
-  if (task_results |> dplyr::count() |> as.double() != 1L) {
+  if (task_results |> dplyr::count() |> as.double() == 0) {
     stop(
       paste(
-        "!!! bettr::assert_task_status failed: ",
+        "!!! bettr::assert_task_status failed, no matches: ",
         bettr_task_str,
-        results_found_str,
         sep = "\n"
       )
     )
   } else {
-    message(
-      paste(
-        "+++ bettr::assert_task_status succeeded: ",
-        bettr_task_str,
-        results_found_str,
-        sep = "\n"
+    task_latest_result <- task_results |>
+      dplyr::arrange(dplyr::desc(last_task_started_dt)) |>
+      dplyr::slice_head(n = 1)
+
+    if (task_results |> dplyr::count() |> as.double() > 1L) {
+      warning(
+        "!!! bettr::assert_task_status found 2+ eligible tasks"
       )
-    )
+    }
+
+    if (task_latest_result$last_status[1] != bettr_task$last_status[1]) {
+      stop(
+        paste(
+          "+++ bettr::assert_task_status failed, latest status mismatch",
+          stringr::str_glue("(expected {bettr_task$last_status[1]}): "),
+          bettr_task_str,
+          results_found_str,
+          sep = "\n"
+        )
+      )
+    }
+
+    else {
+      message(
+        paste(
+          "+++ bettr::assert_task_status succeeded: ",
+          bettr_task_str,
+          results_found_str,
+          sep = "\n"
+        )
+      )
+    }
   }
 
   TRUE
