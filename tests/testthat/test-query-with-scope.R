@@ -9,13 +9,13 @@ withr::defer(
   {
     bettr::drop_table(
       connection_name = "app_dqhi_dev",
-      table_name = "bettr_test_data"
+      table_name = "bettr_test_data_@@@@"
     )
   }
 )
 
 testthat::test_that(
-  "we can create a table, append/pull data, and drop the table",
+  "we can create a table with scope, append/pull data, and drop the table",
   {
     rows <- tibble::tibble(
       value_str = c("Anne", "Betsy", "Cathy", "Donna"),
@@ -28,11 +28,11 @@ testthat::test_that(
       )
     )
 
-    message("----- basics: we can create a table and append data to it")
+    message("----- basics: we can create a table with scope and append data to it")
     result <- bettr::append_rows(
       rows = rows,
       connection_name = "app_dqhi_dev",
-      table_name = "bettr_test_data",
+      table_name = "bettr_test_data_@@@@",
       suppress_bind_logging = TRUE
     )
 
@@ -48,7 +48,7 @@ testthat::test_that(
 
     expected <- bettr::get_rows(
       connection_name = "app_dqhi_dev",
-      sql = "get_bettr_test_data"
+      sql = "get_bettr_test_data_with_scope"
     ) |>
       tibble::tibble()
 
@@ -60,7 +60,7 @@ testthat::test_that(
     expected <- tibble::tibble(value_num = 2) |>
       bettr::get_rows(
         connection_name = "app_dqhi_dev",
-        sql = "get_bettr_test_data_by_number"
+        sql = "get_bettr_test_data_by_number_with_scope"
       ) |>
       tibble::tibble()
 
@@ -85,14 +85,14 @@ testthat::test_that(
     tictoc::tic()
     bettr::drop_table(
       connection_name = "app_dqhi_dev",
-      table_name = "bettr_test_data"
+      table_name = "bettr_test_data_@@@@"
     )
     tictoc::toc()
   }
 )
 
 testthat::test_that(
-  "We can run one or more transactions with zero, one, or many bind rows",
+  "We can run one or more scoped transactions with zero, one, or many bind rows",
   {
     rows <- tibble::tibble(
       value_str = c("Anne", "Betsy", "Cathy", "Donna"),
@@ -105,11 +105,11 @@ testthat::test_that(
       )
     )
 
-    message("----- transactions: we can create a table and append data to it")
+    message("----- transactions: we can create a table with scope and append data to it")
     result <- bettr::append_rows(
       rows = rows,
       connection_name = "app_dqhi_dev",
-      table_name = "bettr_test_data",
+      table_name = "bettr_test_data_@@@@",
       suppress_bind_logging = TRUE
     )
 
@@ -117,7 +117,7 @@ testthat::test_that(
     result <- bettr::append_rows(
       rows = rows,
       connection_name = "app_dqhi_dev",
-      table_name = "bettr_test_data"
+      table_name = "bettr_test_data_@@@@"
     )
 
     # TODO test that there are 8 rows
@@ -126,16 +126,16 @@ testthat::test_that(
       tibble::tibble(value_num = 4) |>
         bettr::get_rows(
           connection_name = "app_dqhi_dev",
-          sql = "get_bettr_test_data_by_number"
+          sql = "get_bettr_test_data_by_number_with_scope"
         ) |>
         dplyr::count() |>
         dplyr::pull()
     )
 
-    message("---- we can run a single transaction, no bind rows")
+    message("---- we can run a single scoped transaction, no bind rows")
     bettr::execute_stmts(
       connection_name = "app_dqhi_dev",
-      sql_file = "one_tx_no_bind_rows"
+      sql_file = "one_tx_no_bind_rows_with_scope"
     )
 
     # TODO test that no records with value_num = 1 remain
@@ -144,16 +144,16 @@ testthat::test_that(
       tibble::tibble(value_num = 1) |>
         bettr::get_rows(
           connection_name = "app_dqhi_dev",
-          sql = "get_bettr_test_data_by_number"
+          sql = "get_bettr_test_data_by_number_with_scope"
         ) |>
         dplyr::count() |>
         dplyr::pull()
     )
 
-    message("---- we can run multiple transactions, no bind rows")
+    message("---- we can run multiple scoped transactions, no bind rows")
     bettr::execute_stmts(
       connection_name = "app_dqhi_dev",
-      sql_file = "many_tx_no_bind_rows"
+      sql_file = "many_tx_no_bind_rows_with_scope"
     )
 
     # TODO test that no records with value_num in (2, 4) remain
@@ -162,21 +162,21 @@ testthat::test_that(
       tibble::tibble(value_num = 4) |>
         bettr::get_rows(
           connection_name = "app_dqhi_dev",
-          sql = "get_bettr_test_data_by_number"
+          sql = "get_bettr_test_data_by_number_with_scope"
         ) |>
         dplyr::filter(value_num %in% c(2, 4)) |>
         dplyr::count() |>
         dplyr::pull()
     )
 
-    message("---- we can run a single transaction, one bind row")
+    message("---- we can run a single scoped transaction, one bind row")
     tibble::tibble(
       value_str = "Erica",
       value_num = 5
     ) |>
       bettr::execute_stmts(
         connection_name = "app_dqhi_dev",
-        sql_file = "one_tx_one_bind_row"
+        sql_file = "one_tx_one_bind_row_with_scope"
       )
 
     # TODO test that there is one new row with value_num = 5, named Erica
@@ -185,21 +185,21 @@ testthat::test_that(
       tibble::tibble(value_num = 5) |>
         bettr::get_rows(
           connection_name = "app_dqhi_dev",
-          sql = "get_bettr_test_data_by_number"
+          sql = "get_bettr_test_data_by_number_with_scope"
         ) |>
         dplyr::filter(value_num == 5, value_str == "Erica") |>
         dplyr::count() |>
         dplyr::pull()
     )
 
-    message("---- we can run multiple transactions, one bind row")
+    message("---- we can run multiple scoped transactions, one bind row")
     tibble::tibble(
       value_str = "Francine",
       value_num = 6
     ) |>
       bettr::execute_stmts(
         connection_name = "app_dqhi_dev",
-        sql_file = "many_tx_one_bind_row",
+        sql_file = "many_tx_one_bind_row_with_scope",
       )
 
     # TODO test that there is no longer a row with value_num = 5
@@ -208,7 +208,7 @@ testthat::test_that(
       tibble::tibble(value_num = 5) |>
         bettr::get_rows(
           connection_name = "app_dqhi_dev",
-          sql = "get_bettr_test_data_by_number"
+          sql = "get_bettr_test_data_by_number_with_scope"
         ) |>
         dplyr::filter(value_num == 5) |>
         dplyr::count() |>
@@ -221,14 +221,14 @@ testthat::test_that(
       tibble::tibble(value_num = 6) |>
         bettr::get_rows(
           connection_name = "app_dqhi_dev",
-          sql = "get_bettr_test_data_by_number"
+          sql = "get_bettr_test_data_by_number_with_scope"
         ) |>
         dplyr::filter(value_num == 6, value_str == "Francine") |>
         dplyr::count() |>
         dplyr::pull()
     )
 
-    message("---- we can run multiple transactions, many bind rows")
+    message("---- we can run multiple scoped transactions, many bind rows")
     tibble::tibble(
         add_value_str = c("Georgia", "Henrietta"),
         add_value_num = c(7, 8),
@@ -236,7 +236,7 @@ testthat::test_that(
       ) |>
       bettr::execute_stmts(
         connection_name = "app_dqhi_dev",
-        sql_file = "many_tx_many_bind_rows",
+        sql_file = "many_tx_many_bind_rows_with_scope",
       )
 
     # TODO test that there are no longer any rows with value_num in (5, 6)
@@ -245,7 +245,7 @@ testthat::test_that(
       tibble::tibble(value_num = 8) |>
         bettr::get_rows(
           connection_name = "app_dqhi_dev",
-          sql = "get_bettr_test_data_by_number"
+          sql = "get_bettr_test_data_by_number_with_scope"
         ) |>
         dplyr::filter(value_num %in% c(5, 6)) |>
         dplyr::count() |>
@@ -258,7 +258,7 @@ testthat::test_that(
       tibble::tibble(value_num = 8) |>
         bettr::get_rows(
           connection_name = "app_dqhi_dev",
-          sql = "get_bettr_test_data_by_number"
+          sql = "get_bettr_test_data_by_number_with_scope"
         ) |>
         dplyr::filter(value_num %in% c(7, 8)) |>
         dplyr::count() |>
