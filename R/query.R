@@ -240,20 +240,18 @@ get_rows_nobinds <- function(connection_name, sql) {
   )
 }
 
-# TODO Add documentation that any ocurrence of "@@@@" in a table name
-# will be replaced with the sanitized SCREAMING_SNAKE contents of
-# the global variable ENVIRONMENT.  This allows for environmentally-
-# scoped tables.
-
 #' Append Rows to a Table
 #'
 #' Take the passed rows and append them to a table given a connection.
 #' If the table does not exist, it is created with `ensure_table()`.
-#' Note: the schema for created tables is expected to be the database username.
+#' Note:
+#' * The schema for created tables is expected to be the database username.
 #'
 #' @param rows a data frame, data.table, or tibble with rows of values to insert
 #' @param connection_name The snake_case name of the connection.
-#' @param table_name The name of the table to receive data.
+#' @param table_name The name of the table to receive data. Any occurrences of
+#' @@@@ in the table name will be replaced by the contents of the environment
+#' variable `ENIVIRONMENT` if it contains only alpha characters.
 #' @param suppress_bind_logging Optionally suppress the logging of bind parameters (defaults to false).
 #' @export
 append_rows <- function(rows, connection_name, table_name, suppress_bind_logging = FALSE) {
@@ -261,8 +259,6 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
     {
       connection_name <- toupper(connection_name)
       schema <- toupper(get_db_username(connection_name))
-      # TODO verify this works as intended
-      table_name <- prepare_table_name(table_name)
 
       # If the table does not exist yet, create and initialize it
       ensure_table(
@@ -270,6 +266,11 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
         connection_name = connection_name,
         table_name = table_name
       )
+
+      # Prepare the table name after we run ensure_table;
+      # this allows ensure_table to find the init SQL file
+      # with the unprepared name
+      table_name <- prepare_table_name(table_name)
 
       # Append to the table, assuming it exists already
       conn <- get_db_conn(connection_name = connection_name)
@@ -326,13 +327,13 @@ ensure_table <- function(rows, connection_name, table_name) {
     {
       connection_name <- toupper(connection_name)
       conn <- get_db_conn(connection_name = connection_name)
-      table_name <- prepare_table_name(table_name)
+      prepared_table_name <- prepare_table_name(table_name)
       schema <- toupper(get_db_username(connection_name))
 
       # If the table does not exist yet, create it
       table_exists <- exists_table(
         connection_name = connection_name,
-        table_name = table_name
+        table_name = prepared_table_name
       )
 
       # message(stringr::str_glue("... table exists: {table_exists}"))
@@ -343,7 +344,7 @@ ensure_table <- function(rows, connection_name, table_name) {
         # then delete the row.  This is the simplest way to ensure typing.
         ROracle::dbWriteTable(
           conn = conn,
-          name = table_name,
+          name = prepared_table_name,
           value = rows |> dplyr::slice_head(n = 1),
           schema = schema,
           row.names = FALSE,
@@ -354,7 +355,7 @@ ensure_table <- function(rows, connection_name, table_name) {
         ROracle::dbSendQuery(
           conn = conn,
           statement = stringr::str_glue(
-            stringr::str_glue("DELETE FROM {table_name}")
+            stringr::str_glue("DELETE FROM {prepared_table_name}")
           ),
           data.frame(table_name = table_name)
         )
@@ -366,9 +367,9 @@ ensure_table <- function(rows, connection_name, table_name) {
           sql = tolower(stringr::str_glue("init_{table_name}"))
         )
 
-        message(stringr::str_glue("+++ initialized table: {table_name}"))
+        message(stringr::str_glue("+++ initialized table: {prepared_table_name}"))
       } else {
-        message(stringr::str_glue("--- table already exists: {table_name}"))
+        message(stringr::str_glue("--- table already exists: {prepared_table_name}"))
       }
 
       TRUE
@@ -803,8 +804,8 @@ get_sql_dir <- function(connection_name = "") {
 #' @param connection_name The snake_case name of the database connection.
 #' @return The SQL statement stored in the file.
 load_sql <- function(sql, connection_name) {
-  if (!is.na(stringr::str_match(sql, "[^-_a-zA-Z0-9]"))) {
-    stop("!!! SQL file has illegal characters/matches ^[-_a-zA-Z0-9]; stopping")
+  if (!is.na(stringr::str_match(sql, "[^-_@a-zA-Z0-9]"))) {
+    stop("!!! SQL file has illegal characters/matches ^[-_@a-zA-Z0-9]; stopping")
   }
 
   sql_path <- paste(
@@ -836,7 +837,6 @@ get_bind_colnames <- function(sql) {
   sql |>
     stringr::str_match_all("&([a-zA-Z0-9_]+)") |>
     data.frame() |>
-    # TODO is this a thing?  Should I worry about this in my |> conversion?
     dplyr::pull(.data$X2) |>
     toupper()
 }
@@ -863,30 +863,14 @@ prepare_table_name <- function(table_name) {
   toupper(replace_4ats(table_name))
 }
 
-#' Parse and Sanitize a Connection Name into a Schema Name
-#' 
-#' Prepares a schema name from a connection name.  Currently a placeholder
-#' for future logic to decouple connection names from schemas.
-#' @param connection_name The connection name.
-#' @return The schema name associated with the connection name.
-prepare_schema_name <- function(connection_name) {
-  if (stringr::str_detect(
-    connection_name,
-    "^[a-zA-Z][_A-Za-z0-9]+$",
-    negate = TRUE
-  )) {
-    stop("!!! Bad connection name; use A-Z followed by A-Z, 0-9, or _")
-  }
-
-  connection_name
-}
-
 #' Parse and Sanitize a SQL Literal
 #' 
-#' Prepares a SQL file for execution with the ROracle library.
+#' Prepares SQL literals for execution with the ROracle library.
 #' This only means that all occurrences of @@@@ in the SQL will be
 #' replaced with the contents of the global variable named
 #' 'ENVIRONMENT' as long as that value contains only alpha characters.
+#' @param sql SQL literal to search and replace.
+#' @return The prepared SQL literal.
 prepare_sql <- function(sql) {
   replace_4ats(str = sql, uppercase = TRUE)
 }
