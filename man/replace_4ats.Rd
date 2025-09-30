@@ -18,5 +18,5 @@ The prepared string.
 \description{
 What it says on the tin.  Will replace all ocurrences of @@
 in the given string with the contents of the global variable named
-'ENVIRONMENT' as long as that value contains only alpha characters.
+'BETTR_AT_SCOPE' as long as that value contains only alpha characters.
 }

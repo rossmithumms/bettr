@@ -10,7 +10,7 @@ prepare_table_name(table_name)
 \item{table_name}{The table name as a string.  Note that table names must
 begin with an alpha character and only use alphanumerics, _, or the @@
 sequence.  If @@ is found in a table name, it will be replaced by
-the contents of the global variable called 'ENVIRONMENT' as long as that
+the contents of the global variable called 'BETTR_AT_SCOPE' as long as that
 variable only contains alpha characters.}
 }
 \value{

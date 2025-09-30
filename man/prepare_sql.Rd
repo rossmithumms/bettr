@@ -6,9 +6,15 @@
 \usage{
 prepare_sql(sql)
 }
+\arguments{
+\item{sql}{SQL literal to search and replace.}
+}
+\value{
+The prepared SQL literal.
+}
 \description{
-Prepares a SQL file for execution with the ROracle library.
+Prepares SQL literals for execution with the ROracle library.
 This only means that all occurrences of @@ in the SQL will be
 replaced with the contents of the global variable named
-'ENVIRONMENT' as long as that value contains only alpha characters.
+'BETTR_AT_SCOPE' as long as that value contains only alpha characters.
 }

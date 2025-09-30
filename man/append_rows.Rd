@@ -11,12 +11,17 @@ append_rows(rows, connection_name, table_name, suppress_bind_logging = FALSE)
 
 \item{connection_name}{The snake_case name of the connection.}
 
-\item{table_name}{The name of the table to receive data.}
+\item{table_name}{The name of the table to receive data. Any occurrences of
+\verb{@@} in the table name will be replaced by the contents of the environment
+variable \code{BETTR_AT_SCOPE} if it contains only alpha characters.}
 
 \item{suppress_bind_logging}{Optionally suppress the logging of bind parameters (defaults to false).}
 }
 \description{
 Take the passed rows and append them to a table given a connection.
 If the table does not exist, it is created with \code{ensure_table()}.
-Note: the schema for created tables is expected to be the database username.
+Note:
+\itemize{
+\item The schema for created tables is expected to be the database username.
+}
 }

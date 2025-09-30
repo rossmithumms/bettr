@@ -250,8 +250,8 @@ get_rows_nobinds <- function(connection_name, sql) {
 #' @param rows a data frame, data.table, or tibble with rows of values to insert
 #' @param connection_name The snake_case name of the connection.
 #' @param table_name The name of the table to receive data. Any occurrences of
-#' @@@@ in the table name will be replaced by the contents of the environment
-#' variable `ENIVIRONMENT` if it contains only alpha characters.
+#' `@@@@` in the table name will be replaced by the contents of the environment
+#' variable `BETTR_AT_SCOPE` if it contains only alpha characters.
 #' @param suppress_bind_logging Optionally suppress the logging of bind parameters (defaults to false).
 #' @export
 append_rows <- function(rows, connection_name, table_name, suppress_bind_logging = FALSE) {
@@ -847,7 +847,7 @@ get_bind_colnames <- function(sql) {
 #' @param table_name The table name as a string.  Note that table names must
 #' begin with an alpha character and only use alphanumerics, _, or the @@@@
 #' sequence.  If @@@@ is found in a table name, it will be replaced by
-#' the contents of the global variable called 'ENVIRONMENT' as long as that
+#' the contents of the global variable called 'BETTR_AT_SCOPE' as long as that
 #' variable only contains alpha characters.
 #' @return The prepared and sanitized table name.
 prepare_table_name <- function(table_name) {
@@ -868,7 +868,7 @@ prepare_table_name <- function(table_name) {
 #' Prepares SQL literals for execution with the ROracle library.
 #' This only means that all occurrences of @@@@ in the SQL will be
 #' replaced with the contents of the global variable named
-#' 'ENVIRONMENT' as long as that value contains only alpha characters.
+#' 'BETTR_AT_SCOPE' as long as that value contains only alpha characters.
 #' @param sql SQL literal to search and replace.
 #' @return The prepared SQL literal.
 prepare_sql <- function(sql) {
@@ -879,14 +879,14 @@ prepare_sql <- function(sql) {
 #' 
 #' What it says on the tin.  Will replace all ocurrences of @@@@
 #' in the given string with the contents of the global variable named
-#' 'ENVIRONMENT' as long as that value contains only alpha characters.
+#' 'BETTR_AT_SCOPE' as long as that value contains only alpha characters.
 #' @param str String to search and replace.
 #' @param uppercase Boolean to indicate if the name should be uppercased.
 #' Defaults to FALSE.
 #' @return The prepared string.
 replace_4ats <- function(str, uppercase = FALSE) {
   if (stringr::str_detect(str, "@@@@")) {
-    replacement <- Sys.getenv("ENVIRONMENT")
+    replacement <- Sys.getenv("BETTR_AT_SCOPE")
 
     if (uppercase) {
       replacement <- toupper(replacement)
@@ -897,7 +897,7 @@ replace_4ats <- function(str, uppercase = FALSE) {
       "^[a-zA-Z]+$",
       negate = TRUE
     )) {
-      stop("!!! @@@@ found, but env var ENVIRONMENT empty/non-alpha characters")
+      stop("!!! @@@@ error: env BETTR_AT_SCOPE empty/bad chars (A-Z, _ only)")
     }
     str <- stringr::str_replace_all(
       str,
