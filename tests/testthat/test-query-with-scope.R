@@ -1,7 +1,7 @@
 readRenviron("/workspaces/brain/.Renviron")
 readRenviron("/workspaces/brain/.Renviron.test")
 Sys.setenv(SQL_DIR = Sys.getenv("BETTR_SQL_DIR"))
-Sys.setenv(BETTR_AT_SCOPE = "btestenv")
+Sys.setenv(BETTR_AT_SCOPE = "bettr_test")
 test_tz <- Sys.getenv("TZ")
 
 #testthat::teardown(

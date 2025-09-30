@@ -894,7 +894,7 @@ replace_4ats <- function(str, uppercase = FALSE) {
 
     if (stringr::str_detect(
       replacement,
-      "^[a-zA-Z]+$",
+      "^[a-zA-Z_]+$",
       negate = TRUE
     )) {
       stop("!!! @@@@ error: env BETTR_AT_SCOPE empty/bad chars (A-Z, _ only)")
