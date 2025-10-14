@@ -638,6 +638,90 @@ generate_init_sql <- function(
   view_grants = c()) {
 
   sql_file_name <- stringr::str_glue("init_{tolower(table_name)}.sql")
+  sql_dir <- Sys.getenv("SQL_DIR")
+
+  # Generate SQL statements for the live (default) table
+  sql_init_live <- generate_sql_init_stmts(
+    rows = rows,
+    table_name = table_name,
+    connection_name = connection_name,
+    index_id_columns = index_id_columns,
+    index_columns = index_columns,
+    view_grants = view_grants
+  )
+
+  # Generate SQL statements for the archive table
+  sql_init_archive <- generate_sql_init_stmts(
+    rows = rows,
+    table_name = stringr::str_glue("arch_{table_name}"),
+    connection_name = connection_name,
+    index_id_columns = index_id_columns,
+    index_columns = index_columns,
+    view_grants = view_grants
+  )
+
+  # Generate SQL statements for the union view
+  sql_init_union <- generate_sql_init_union_view_stmt(
+    rows = rows,
+    table_names = c(
+      table_name,
+      stringr::str_glue("arch_{table_name}")
+    ),
+    view_name = stringr::str_glue("all_{table_name}"),
+    connection_name = connection_name,
+    view_grants = view_grants
+  )
+
+  init_sql_file <- file(paste(
+    sql_dir,
+    toupper(connection_name),
+    sql_file_name,
+    sep = .Platform$file.sep
+  ))
+  writeLines(
+    paste(
+      sql_init_live,
+      sql_init_archive,
+      sql_init_union,
+      sep = ""
+    ) |>
+      stringr::str_replace_all(
+        pattern = "(;;;\n)+",
+        replacement = ";;;\n"
+      )
+    ,
+    init_sql_file
+  )
+  close(init_sql_file)
+}
+
+#' Generate ETL Initialization SQL
+#' 
+#' This method helps `bettr::generate_init_sql` by generating the
+#' `ALTER TABLE`, `CREATE VIEW` and `GRANT` statements associated
+#' with the provided input.
+#' Handling this process in a separate function allows the caller
+#' to create variants of the requested table, such as archives.
+#' @param rows Rows of data from an extract that are representative of the data
+#' to be stored in the new table and presented in a new view.
+#' @param table_name The name of the table.
+#' @param connection_name The name of the database connection (schema user).
+#' @param index_id_columns If TRUE, columns that end in `_id` will automatically
+#' have indexes created on them.  Defaults to TRUE.
+#' @param index_columns A vector of column names to be indexed.  If parameter
+#' `index_id_columns` = TRUE, this will supplement those columns.
+#' @param view_grants The names of database roles to grant SELECT permissions.
+#' Defaults to none.
+#' @return String containing the generated SQL statements,
+#' delimited by `;;;`.
+generate_sql_init_stmts <- function(
+  rows,
+  table_name,
+  connection_name,
+  index_id_columns = TRUE,
+  index_columns = c(),
+  view_grants = c()) {
+
   table_name <- prepare_table_name(table_name)
   connection_name <- toupper(connection_name)
   schema_name <- get_db_username(connection_name)
@@ -651,12 +735,11 @@ generate_init_sql <- function(
     )
   }
   index_missing <- setdiff(index_columns, col_names)
-  sql_dir <- Sys.getenv("SQL_DIR")
   if (length(index_missing) > 0) {
     stop(
       stringr::str_glue(
         paste(
-          "!!! generate_init_sql could not index missing columns: ",
+          "!!! generate_init_sql_stmts could not index missing columns: ",
           paste0(index_missing, collapse = ", "),
           sep = ""
         )
@@ -683,7 +766,7 @@ generate_init_sql <- function(
     })() |>
     paste0(collapse = ";;;\n")
   view_stmt <- stringr::str_glue(
-    "CREATE VIEW V_{table_name} (\n  {table_name}_KEY,\n  ",
+    "CREATE OR REPLACE VIEW V_{table_name} (\n  {table_name}_KEY,\n  ",
     paste0(
       col_names,
       collapse = ",\n  "
@@ -703,23 +786,78 @@ generate_init_sql <- function(
       )
     })() |>
     paste0(collapse = ";;;\n")
-  init_sql <- paste(
+  paste(
     alter_table_stmt,
     index_stmts,
     view_stmt,
     view_grant_stmts,
     sep = ";;;\n"
   )
-  init_sql_file <- file(paste(
-    sql_dir,
-    connection_name,
-    sql_file_name,
-    sep = .Platform$file.sep
-  ))
-  writeLines(init_sql, init_sql_file)
-  close(init_sql_file)
 }
 
+#' Generate ETL Union View Statement
+#' 
+#' This method helps `bettr::generate_init_sql` by generating the
+#' statement to create a unioned view of two or more replicate tables.
+#' This is used to create a unioned view of live and archival data.
+#' 
+#' @param rows Rows of data from an extract that are representative of the data
+#' to be stored in the new table and presented in a new view.
+#' @param table_names Vector of table names to combine in the union.
+#' @param view_name Name of the union view to create; "V_" prefix will be added.
+#' @param connection_name The name of the database connection (schema user).
+#' @param view_grants The names of database roles to grant SELECT permissions.
+#' Defaults to none.
+#' @return String containing the generated SQL statement.
+generate_sql_init_union_view_stmt <- function(
+  rows,
+  table_names,
+  view_name,
+  connection_name,
+  view_grants = c()) {
+
+  table_names <- prepare_table_name(table_names)
+  view_name <- prepare_table_name(view_name)
+  connection_name <- toupper(connection_name)
+  schema_name <- get_db_username(connection_name)
+  col_names <- rows |> names() |> toupper()
+
+  # For each table name, select columns and UNION ALL in the view
+  view_stmt <- paste0(
+    stringr::str_glue(
+      "CREATE OR REPLACE VIEW V_{view_name} (\n  {view_name}_KEY,\n  ",
+      paste0(
+        col_names,
+        collapse = ",\n  "
+      ),
+      ",\n  AUDIT_INSERT_DT\n) AS ("
+    ),
+    paste0(
+      "\n  SELECT\n    KEY,\n    \"",
+      paste0(
+        tolower(col_names),
+        collapse = "\",\n    \""
+      ),
+      stringr::str_glue(
+        "\",\n    AUDIT_INSERT_DT\n  FROM\n    {schema_name}.{table_names}"
+      ),
+      collapse = "\n  UNION ALL"
+    ),
+    "\n)",
+    collapse = ""
+  )
+  view_grant_stmts <- paste(
+    stringr::str_glue(
+      "GRANT SELECT ON V_{view_name} TO {toupper(view_grants)}"
+    ),
+    collapse = ";;;\n"
+  )
+  paste(
+    view_stmt,
+    view_grant_stmts,
+    sep = ";;;\n"
+  )
+}
 
 #' Get URL Query Parameters
 #'
@@ -851,11 +989,11 @@ get_bind_colnames <- function(sql) {
 #' variable only contains alpha characters.
 #' @return The prepared and sanitized table name.
 prepare_table_name <- function(table_name) {
-  if (stringr::str_detect(
+  if (any(stringr::str_detect(
     table_name,
     "^[a-zA-Z][_A-Za-z0-9@]+$",
     negate = TRUE
-  )) {
+  ))) {
     stop("!!! Bad table name; use A-Z followed by A-Z, 0-9, _, or @@@@")
   }
 
@@ -885,7 +1023,7 @@ prepare_sql <- function(sql) {
 #' Defaults to FALSE.
 #' @return The prepared string.
 replace_4ats <- function(str, uppercase = FALSE) {
-  if (stringr::str_detect(str, "@@@@")) {
+  if (any(stringr::str_detect(str, "@@@@"))) {
     replacement <- Sys.getenv("BETTR_AT_SCOPE")
 
     if (uppercase) {
