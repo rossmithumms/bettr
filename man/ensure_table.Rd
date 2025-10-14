@@ -4,7 +4,7 @@
 \alias{ensure_table}
 \title{Ensure a Table Exists for Appending Rows}
 \usage{
-ensure_table(rows, connection_name, table_name)
+ensure_table(rows, connection_name, table_name, skip_archive_table = FALSE)
 }
 \arguments{
 \item{rows}{Table structure with representative data for the table to create/verify.}
@@ -12,6 +12,9 @@ ensure_table(rows, connection_name, table_name)
 \item{connection_name}{The snake_case name of the connection.}
 
 \item{table_name}{The snake_case name of the table to ensure exists in the database.}
+
+\item{skip_archive_table}{Whether to skip ensuring an identical "ARCH_" table.
+Defaults to FALSE.}
 }
 \value{
 Nothing

@@ -7,9 +7,14 @@ test_tz <- Sys.getenv("TZ")
 #testthat::teardown(
 withr::defer(
   {
-    bettr::drop_table(
-      connection_name = "app_dqhi_dev",
-      table_name = "bettr_test_data"
+    tryCatch(
+      {
+        bettr::drop_table(
+          connection_name = "app_dqhi_dev",
+          table_name = "bettr_test_data"
+        )
+      },
+      error = \(e) {}
     )
   }
 )
@@ -82,12 +87,10 @@ testthat::test_that(
     )
 
     message("----- we can delete it")
-    tictoc::tic()
     bettr::drop_table(
       connection_name = "app_dqhi_dev",
       table_name = "bettr_test_data"
     )
-    tictoc::toc()
   }
 )
 
@@ -263,6 +266,62 @@ testthat::test_that(
         dplyr::filter(value_num %in% c(7, 8)) |>
         dplyr::count() |>
         dplyr::pull()
+    )
+  }
+)
+
+testthat::test_that(
+  "We can generate working initialization SQL with views and archive tables",
+  {
+
+    # Get some test test data
+    rows <- tibble::tibble(
+      this = c("that", "other"),
+      foo = c("boo", "bar"),
+      mumble = c(1, 2),
+      frotz = c(lubridate::now(), lubridate::today())
+    )
+
+    # Generate init SQL file
+    rows |>
+      bettr::generate_init_sql(
+        connection_name = "app_dqhi_dev",
+        table_name = "bettr_init_sql",
+        index_columns = c(
+          "foo",
+          "mumble"
+        )
+      )
+
+    # Ensure the table exists
+    rows |>
+      bettr::ensure_table(
+        connection_name = "app_dqhi_dev",
+        table_name = "bettr_init_sql"
+      )
+
+    # Append rows
+    rows |>
+      bettr::append_rows(
+        connection_name = "app_dqhi_dev",
+        table_name = "bettr_init_sql"
+      )
+
+    # Query the union view to ensure we see results
+    rs <- bettr::get_rows(
+      connection_name = "app_dqhi_dev",
+      sql = "get_all_bettr_init_sql"
+    )
+
+    # Should have 2 rows
+    testthat::expect_equal(
+      as.double(dplyr::count(rs)), 2
+    )
+
+    # Teardown
+    bettr::execute_stmts(
+      connection_name = "app_dqhi_dev",
+      sql_file = "drop_bettr_init_sql_table_and_views"
     )
   }
 )

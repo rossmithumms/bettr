@@ -320,9 +320,11 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
 #' @param rows Table structure with representative data for the table to create/verify.
 #' @param connection_name The snake_case name of the connection.
 #' @param table_name The snake_case name of the table to ensure exists in the database.
+#' @param skip_archive_table Whether to skip ensuring an identical "ARCH_" table.
+#' Defaults to FALSE.
 #' @return Nothing
 #' @export
-ensure_table <- function(rows, connection_name, table_name) {
+ensure_table <- function(rows, connection_name, table_name, skip_archive_table = FALSE) {
   tryCatch(
     {
       connection_name <- toupper(connection_name)
@@ -356,9 +358,33 @@ ensure_table <- function(rows, connection_name, table_name) {
           conn = conn,
           statement = stringr::str_glue(
             stringr::str_glue("DELETE FROM {prepared_table_name}")
-          ),
-          data.frame(table_name = table_name)
+          )
         )
+
+        # Repeat this process for the archive table
+        if (skip_archive_table == FALSE) {
+          prepared_arch_table_name = prepare_table_name(paste("arch", table_name, sep = "_"))
+          message(stringr::str_glue("+++ use archive table: {prepared_arch_table_name}"))
+
+          ROracle::dbWriteTable(
+            conn = conn,
+            name = prepared_arch_table_name,
+            value = rows |> dplyr::slice_head(n = 1),
+            schema = schema,
+            row.names = FALSE,
+            override = FALSE,
+            append = FALSE
+          )
+
+          ROracle::dbSendQuery(
+            conn = conn,
+            statement = stringr::str_glue(
+              stringr::str_glue("DELETE FROM {prepared_arch_table_name}")
+            )
+          )
+        } else {
+          message("--- skipping archive table")
+        }
 
         # Now initialize the table by appending auto-incrementing
         # key columns, indexes, views, etc
@@ -609,12 +635,18 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
 #'
 #' This is sugar to simplify the process of creating initialization SQL files.
 #' It depends on the environmental variable SQL_DIR to be set.
-#' This function will attempt to generate a SQL file that adds columns, indexes,
+#' This function will generate a SQL file that adds columns, indexes,
 #' views, and grants.
-#' Note that this is a CLI utility function in the R command console, not meant
-#' to be run outside of a developer's console.  No calling this in task R files.
-#' Naturally, once the init SQL has been created and tested, it should be
-#' added to your project's version control.
+#' The tables and views created are:
+#' - `<TABLE_NAME>`: The live table
+#' - `ARCH_<TABLE_NAME>`: The archive table (identical and empty)
+#' - `V_<TABLE_NAME>`: View to the live table
+#' - `V_ARCH_<TABLE_NAME>`: View to the archive table
+#' - `V_ALL_<TABLE_NAME>`: View to a UNION of the live and archive tables
+#' Indexes (which are created on all columsn ending in `_id` and any
+#' passed in the parameter `index_columns`) are created on both the live
+#' and archive table.
+#' It is up to you to decide how or if to use the archive table.
 #' @param rows Rows of data from an extract that are representative of the data
 #' to be stored in the new table and presented in a new view.
 #' @param table_name The name of the table.
@@ -762,7 +794,7 @@ generate_sql_init_stmts <- function(
     paste(collapse = ";;;\n")
 
   view_stmt <- stringr::str_glue(
-    "CREATE OR REPLACE VIEW V_{table_name} (
+    "CREATE VIEW V_{table_name} (
   {table_name}_KEY,
   ",
     paste0(
@@ -827,9 +859,8 @@ generate_sql_init_union_view_stmt <- function(
 
   # For each table name, select columns and UNION ALL in the view
   view_stmt <- paste0(
-    stringr::str_glue("CREATE OR REPLACE VIEW V_{view_name} (
-  {view_name}_KEY,
-  "),
+    stringr::str_glue("CREATE VIEW V_{view_name} (
+  {view_name}_KEY,\n  "),
   paste0(
     col_names,
     collapse = ",\n  "
