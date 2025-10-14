@@ -520,6 +520,88 @@ drop_table <- function(connection_name, table_name) {
   )
 }
 
+#' Flush a Table's Stale Rows to Archive
+#' 
+#' All rows with a `stale_column` value less than or equal to
+#' the `stale_dt` will be selected, added to the archive table
+#' at `ARCH_<TABLE_NAME>`, and deleted from `<TABLE_NAME>`.
+#' 
+#' @param connection_name The snake_case name of the connection.
+#' @param table_name The name of the (live) table to archive.
+#' @param stale_column The datetime column used to determine staleness.
+#' @param stale_dt The datetime threshold used to determine staleness.
+#' @export
+flush_to_archive <- function(
+  connection_name,
+  table_name,
+  stale_column,
+  stale_dt
+) {
+  tryCatch(
+    {
+      live_table_name <- prepare_table_name(table_name)
+      archive_table_name <- prepare_table_name(paste("arch", table_name, sep = "_"))
+      stale_column <- tolower(prepare_table_name(stale_column))
+      connection_name <- toupper(connection_name)
+      schema_name <- get_db_username(connection_name)
+
+      # Select rows from the live table
+      conn <- get_db_conn(connection_name = connection_name)
+
+      rs <- ROracle::dbSendQuery(
+        conn = conn,
+        statement = stringr::str_glue(
+          "SELECT * FROM {live_table_name} WHERE \"{stale_column}\" <= &stale_dt"
+        ),
+        data.frame(stale_dt = stale_dt)
+      )
+
+      stale_rows <- ROracle::fetch(rs) |>
+        tibble::as_tibble(.name_repair = snakecase::to_snake_case) |>
+        dplyr::select(
+          -c(key, audit_insert_dt)
+        )
+
+      ROracle::dbClearResult(rs)
+
+      # Add rows to the archive
+      dplyr::glimpse(stale_rows)
+      stale_rows |>
+        append_rows(
+          connection_name = connection_name,
+          table_name = archive_table_name
+        )
+
+      # Delete rows from the live table
+      conn <- get_db_conn(connection_name = connection_name)
+      ROracle::dbSendQuery(
+        conn = conn,
+        statement = stringr::str_glue(
+          "DELETE FROM {live_table_name} WHERE \"{stale_column}\" <= &STALE_DT"
+        ),
+        data.frame(stale_dt = stale_dt)
+      )
+    },
+
+    warning = function(warn) {
+      warning(warn)
+    },
+
+    error = function(err) {
+      message("!!! Error durring flush_to_archive")
+      message(err)
+      if (exists(conn)) {
+        message(ROracle::dbGetException(conn))
+      }
+      stop(err)
+    },
+
+    finally = {
+      close_db_conn_pool()
+    }
+  )
+}
+
 #' Execute a Series of SQL Transactions
 #'
 #' @param connection_name The snake_case name of the connection.

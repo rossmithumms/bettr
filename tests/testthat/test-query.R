@@ -12,6 +12,10 @@ withr::defer(
           connection_name = "app_dqhi_dev",
           table_name = "bettr_test_data"
         )
+        bettr::execute_stmts(
+          connection_name = "app_dqhi_dev",
+          sql_file = "drop_bettr_init_sql"
+        )
       },
       error = \(e) {}
     )
@@ -278,7 +282,7 @@ testthat::test_that(
       this = c("that", "other"),
       foo = c("boo", "bar"),
       mumble = c(1, 2),
-      frotz = c(lubridate::now(), lubridate::today())
+      frotz = c(lubridate::now(), lubridate::now() - lubridate::days(2))
     )
 
     # Generate init SQL file
@@ -317,10 +321,29 @@ testthat::test_that(
       as.double(dplyr::count(rs)), 2
     )
 
+    # TODO flush to archive
+    bettr::flush_to_archive(
+      connection_name = "app_dqhi_dev",
+      table_name = "bettr_init_sql",
+      stale_column = "frotz",
+      stale_dt = lubridate::now() - lubridate::days(1)
+    )
+
+    # TODO Query the archive view to ensure we see results
+    rs <- bettr::get_rows(
+      connection_name = "app_dqhi_dev",
+      sql = "get_arch_bettr_init_sql"
+    )
+
+    # TODO Should have 1 row
+    testthat::expect_equal(
+      as.double(dplyr::count(rs)), 1
+    )
+
     # Teardown
     bettr::execute_stmts(
       connection_name = "app_dqhi_dev",
-      sql_file = "drop_bettr_init_sql_table_and_views"
+      sql_file = "drop_bettr_init_sql"
     )
   }
 )
