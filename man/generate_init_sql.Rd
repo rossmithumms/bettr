@@ -38,10 +38,18 @@ environment variable.  Defaults to none.
 \description{
 This is sugar to simplify the process of creating initialization SQL files.
 It depends on the environmental variable SQL_DIR to be set.
-This function will attempt to generate a SQL file that adds columns, indexes,
+This function will generate a SQL file that adds columns, indexes,
 views, and grants.
-Note that this is a CLI utility function in the R command console, not meant
-to be run outside of a developer's console.  No calling this in task R files.
-Naturally, once the init SQL has been created and tested, it should be
-added to your project's version control.
+The tables and views created are:
+\itemize{
+\item \verb{<TABLE_NAME>}: The live table
+\item \verb{ARCH_<TABLE_NAME>}: The archive table (identical and empty)
+\item \verb{V_<TABLE_NAME>}: View to the live table
+\item \verb{V_ARCH_<TABLE_NAME>}: View to the archive table
+\item \verb{V_ALL_<TABLE_NAME>}: View to a UNION of the live and archive tables
+Indexes (which are created on all columsn ending in \verb{_id} and any
+passed in the parameter \code{index_columns}) are created on both the live
+and archive table.
+It is up to you to decide how or if to use the archive table.
+}
 }

@@ -4,12 +4,16 @@ Sys.setenv(SQL_DIR = Sys.getenv("BETTR_SQL_DIR"))
 Sys.setenv(BETTR_AT_SCOPE = "bettr_test")
 test_tz <- Sys.getenv("TZ")
 
-#testthat::teardown(
 withr::defer(
   {
-    bettr::drop_table(
-      connection_name = "app_dqhi_dev",
-      table_name = "bettr_test_data_@@@@"
+    tryCatch(
+      {
+        bettr::drop_table(
+          connection_name = "app_dqhi_dev",
+          table_name = "bettr_test_data_@@@@"
+        )
+      },
+      error = \(e) {}
     )
   }
 )
@@ -82,12 +86,10 @@ testthat::test_that(
     )
 
     message("----- we can delete it")
-    tictoc::tic()
     bettr::drop_table(
       connection_name = "app_dqhi_dev",
       table_name = "bettr_test_data_@@@@"
     )
-    tictoc::toc()
   }
 )
 
@@ -120,7 +122,7 @@ testthat::test_that(
       table_name = "bettr_test_data_@@@@"
     )
 
-    # TODO test that there are 8 rows
+    # test that there are 8 rows
     testthat::expect_equal(
       8,
       tibble::tibble(value_num = 4) |>
@@ -138,7 +140,7 @@ testthat::test_that(
       sql_file = "one_tx_no_bind_rows_with_scope"
     )
 
-    # TODO test that no records with value_num = 1 remain
+    # test that no records with value_num = 1 remain
     testthat::expect_equal(
       0,
       tibble::tibble(value_num = 1) |>
@@ -156,7 +158,7 @@ testthat::test_that(
       sql_file = "many_tx_no_bind_rows_with_scope"
     )
 
-    # TODO test that no records with value_num in (2, 4) remain
+    # test that no records with value_num in (2, 4) remain
     testthat::expect_equal(
       0,
       tibble::tibble(value_num = 4) |>
@@ -179,7 +181,7 @@ testthat::test_that(
         sql_file = "one_tx_one_bind_row_with_scope"
       )
 
-    # TODO test that there is one new row with value_num = 5, named Erica
+    # test that there is one new row with value_num = 5, named Erica
     testthat::expect_equal(
       1,
       tibble::tibble(value_num = 5) |>
@@ -202,7 +204,7 @@ testthat::test_that(
         sql_file = "many_tx_one_bind_row_with_scope",
       )
 
-    # TODO test that there is no longer a row with value_num = 5
+    # test that there is no longer a row with value_num = 5
     testthat::expect_equal(
       0,
       tibble::tibble(value_num = 5) |>
@@ -215,7 +217,7 @@ testthat::test_that(
         dplyr::pull()
     )
 
-    # TODO test that there is a row with value_num = 6, named Francine
+    # test that there is a row with value_num = 6, named Francine
     testthat::expect_equal(
       1,
       tibble::tibble(value_num = 6) |>
@@ -239,7 +241,7 @@ testthat::test_that(
         sql_file = "many_tx_many_bind_rows_with_scope",
       )
 
-    # TODO test that there are no longer any rows with value_num in (5, 6)
+    # test that there are no longer any rows with value_num in (5, 6)
     testthat::expect_equal(
       0,
       tibble::tibble(value_num = 8) |>
@@ -252,7 +254,7 @@ testthat::test_that(
         dplyr::pull()
     )
 
-    # TODO test that there are two new rows with value_num (7, 8)
+    # test that there are two new rows with value_num (7, 8)
     testthat::expect_equal(
       2,
       tibble::tibble(value_num = 8) |>
