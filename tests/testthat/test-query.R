@@ -12,9 +12,23 @@ withr::defer(
           connection_name = "app_dqhi_dev",
           table_name = "bettr_test_data"
         )
+      },
+      error = \(e) {}
+    )
+    tryCatch(
+      {
         bettr::execute_stmts(
           connection_name = "app_dqhi_dev",
           sql_file = "drop_bettr_init_sql"
+        )
+      },
+      error = \(e) {}
+    )
+    tryCatch(
+      {
+        bettr::execute_stmts(
+          connection_name = "app_dqhi_dev",
+          sql_file = "drop_bettr_cache_test"
         )
       },
       error = \(e) {}
@@ -345,5 +359,62 @@ testthat::test_that(
       connection_name = "app_dqhi_dev",
       sql_file = "drop_bettr_init_sql"
     )
+  }
+)
+
+testthat::test_that(
+  "We can rotate a cached version of a view through replicates",
+  {
+
+    # Get some test test data
+    rows <- tibble::tibble(
+      this = c("that", "other"),
+      foo = c("boo", "bar"),
+      mumble = c(1, 2),
+      frotz = c(lubridate::now(), lubridate::now() - lubridate::days(2))
+    )
+
+    # Generate init SQL file
+    rows |>
+      bettr::generate_init_sql(
+        connection_name = "app_dqhi_dev",
+        table_name = "bettr_cache_test",
+        index_columns = c(
+          "foo",
+          "mumble"
+        )
+      )
+
+    # Ensure the table exists
+    rows |>
+      bettr::ensure_table(
+        connection_name = "app_dqhi_dev",
+        table_name = "bettr_cache_test"
+      )
+
+    # Append rows
+    rows |>
+      bettr::append_rows(
+        connection_name = "app_dqhi_dev",
+        table_name = "bettr_cache_test"
+      )
+
+    # TODO initialize a view on this data
+    bettr::execute_stmts(
+      connection_name = "app_dqhi_dev",
+      sql_file = "init_v_my_cache_test"
+    )
+
+    # Rotate caches
+    bettr::rotate_cache(
+      connection_name = "app_dqhi_dev",
+      view_name = "v_my_cache_test"
+    )
+
+    # Teardown
+    # bettr::execute_stmts(
+    #   connection_name = "app_dqhi_dev",
+    #   sql_file = "drop_bettr_cache_test"
+    # )
   }
 )
