@@ -24,15 +24,15 @@ withr::defer(
       },
       error = \(e) {}
     )
-    tryCatch(
-      {
-        bettr::execute_stmts(
-          connection_name = "app_dqhi_dev",
-          sql_file = "drop_bettr_cache_test"
-        )
-      },
-      error = \(e) {}
-    )
+    # tryCatch(
+    #   {
+    #     bettr::execute_stmts(
+    #       connection_name = "app_dqhi_dev",
+    #       sql_file = "drop_bettr_cache_test"
+    #     )
+    #   },
+    #   error = \(e) {}
+    # )
   }
 )
 
@@ -250,10 +250,10 @@ testthat::test_that(
 
     message("---- we can run multiple transactions, many bind rows")
     tibble::tibble(
-        add_value_str = c("Georgia", "Henrietta"),
-        add_value_num = c(7, 8),
-        delete_value_num = c(5, 6)
-      ) |>
+      add_value_str = c("Georgia", "Henrietta"),
+      add_value_num = c(7, 8),
+      delete_value_num = c(5, 6)
+    ) |>
       bettr::execute_stmts(
         connection_name = "app_dqhi_dev",
         sql_file = "many_tx_many_bind_rows",
@@ -335,7 +335,7 @@ testthat::test_that(
       as.double(dplyr::count(rs)), 2
     )
 
-    # TODO flush to archive
+    # Flush to archive
     bettr::flush_to_archive(
       connection_name = "app_dqhi_dev",
       table_name = "bettr_init_sql",
@@ -343,13 +343,13 @@ testthat::test_that(
       stale_dt = lubridate::now() - lubridate::days(1)
     )
 
-    # TODO Query the archive view to ensure we see results
+    # Query the archive view to ensure we see results
     rs <- bettr::get_rows(
       connection_name = "app_dqhi_dev",
       sql = "get_arch_bettr_init_sql"
     )
 
-    # TODO Should have 1 row
+    # Should have 1 row
     testthat::expect_equal(
       as.double(dplyr::count(rs)), 1
     )
@@ -366,7 +366,7 @@ testthat::test_that(
   "We can rotate a cached version of a view through replicates",
   {
 
-    # Get some test test data
+    # Make some test test data
     rows <- tibble::tibble(
       this = c("that", "other"),
       foo = c("boo", "bar"),
@@ -399,22 +399,106 @@ testthat::test_that(
         table_name = "bettr_cache_test"
       )
 
-    # TODO initialize a view on this data
+    # Initialize a view on this data; this is what we will cache
     bettr::execute_stmts(
       connection_name = "app_dqhi_dev",
       sql_file = "init_v_my_cache_test"
     )
 
-    # Rotate caches
+    # ===== FIRST ROTATION
     bettr::rotate_cache(
       connection_name = "app_dqhi_dev",
       view_name = "v_my_cache_test"
     )
 
+    # Query the cache view; do we see the expected rows?
+    cached_rows <- bettr::get_rows(
+      connection_name = "app_dqhi_dev",
+      sql = "get_my_cache_test"
+    )
+
+    testthat::expect_equal(
+      cached_rows |> dplyr::count() |> as.double(),
+      2
+    )
+
+    # Add more rows to the live table
+    rows |>
+      bettr::append_rows(
+        connection_name = "app_dqhi_dev",
+        table_name = "bettr_cache_test"
+      )
+
+    # Query the cache view; same as before?
+    cached_rows <- bettr::get_rows(
+      connection_name = "app_dqhi_dev",
+      sql = "get_my_cache_test"
+    )
+
+    testthat::expect_equal(
+      cached_rows |> dplyr::count() |> as.double(),
+      2
+    )
+
+    # ===== SECOND ROTATION
+    # This time, use a view grant
+    # (Note that this role must exist in the Oracle DB)
+    bettr::rotate_cache(
+      connection_name = "app_dqhi_dev",
+      view_name = "v_my_cache_test",
+      view_grants = c("PHLEB_ROLE")
+    )
+
+    # Query the cache view; do we see the rows added to live?
+    cached_rows <- bettr::get_rows(
+      connection_name = "app_dqhi_dev",
+      sql = "get_my_cache_test"
+    )
+
+    testthat::expect_equal(
+      cached_rows |> dplyr::count() |> as.double(),
+      4
+    )
+
+    # Add more rows to the live table
+    rows |>
+      bettr::append_rows(
+        connection_name = "app_dqhi_dev",
+        table_name = "bettr_cache_test"
+      )
+
+    # Query the cache view; same as before?
+    cached_rows <- bettr::get_rows(
+      connection_name = "app_dqhi_dev",
+      sql = "get_my_cache_test"
+    )
+
+    testthat::expect_equal(
+      cached_rows |> dplyr::count() |> as.double(),
+      4
+    )
+
+    # ===== THIRD ROTATION
+    bettr::rotate_cache(
+      connection_name = "app_dqhi_dev",
+      view_name = "v_my_cache_test"
+    )
+
+    # Query the cache view; do we see the rows added to live?
+    cached_rows <- bettr::get_rows(
+      connection_name = "app_dqhi_dev",
+      sql = "get_my_cache_test"
+    )
+
+    testthat::expect_equal(
+      cached_rows |> dplyr::count() |> as.double(),
+      6
+    )
+
     # Teardown
-    # bettr::execute_stmts(
-    #   connection_name = "app_dqhi_dev",
-    #   sql_file = "drop_bettr_cache_test"
-    # )
+    bettr::execute_stmts(
+      connection_name = "app_dqhi_dev",
+      sql_file = "drop_bettr_cache_test"
+    )
   }
 )

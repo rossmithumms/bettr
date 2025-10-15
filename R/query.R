@@ -603,13 +603,12 @@ flush_to_archive <- function(
 
 #' Rotate the Contents of a View Cache
 #' 
-#' Passing the name of a view will cause this function to:
-#' 1. Get rows to replicate with `SELECT * FROM <VIEW_NAME>`
-#' 2. Verify the existence of `RPL1_<VIEW_NAME>` and `RPL2_<VIEW_NAME>` tables
-#' 3. Identify which to use (the one with least `MAX(AUDIT_INSERT_DT)`, or REPL1)
-#' 4. Truncate the target replicate
-#' 5. Append rows to the target replicate
-#' 6. `CREATE OR REPLACE VIEW R<VIEW_NAME> AS SELECT * FROM <TARGET_REPLICATE_VIEW>`
+#' This function will initialize a double-replicate cache of the passed view
+#' and create a view named `C<VIEW_NAME>` pointing to the first replicate.
+#' Each time you call `rotate_cache` with the same `connection_name` and
+#' `view_name`, the stale (not shown) replicate will be truncated and
+#' refreshed with data from `view_name` and the view `C<VIEW_NAME>` will be
+#' replaced to point to it.
 #' 
 #' Note: The view you replicate should not return columns named KEY or
 #' AUDIT_INSERT_DT, as these are automatically added for auditing purposes
@@ -618,13 +617,15 @@ flush_to_archive <- function(
 #' anyway, this function will rename them to the "SRC_" alternate form
 #' for you.  Passing both forms (such as KEY and SRC_KEY) will cause an error.
 #' 
-#' This should be all that is needed to have alternating caches of highly
-#' up-to-date information without any configuration overhead.
+#' This should be all that is needed to create a flattened cache of highly
+#' up-to-date view data without any configuration overhead.
 #' 
 #' @param connection_name The snake_case name of the connection.
 #' @param view_name Caches will be rotated for this view.
+#' @param view_grants The names of database roles to grant SELECT permissions.
+#' Defaults to none.
 #' @export
-rotate_cache <- function(connection_name, view_name) {
+rotate_cache <- function(connection_name, view_name, view_grants = c()) {
   tryCatch(
     {
       connection_name <- toupper(connection_name)
@@ -634,7 +635,7 @@ rotate_cache <- function(connection_name, view_name) {
       schema_name <- get_db_username(connection_name)
 
 
-      # TODO select rows from the view to cache
+      # Select rows from the view to cache
       conn <- get_db_conn(connection_name = connection_name)
 
       rs <- ROracle::dbSendQuery(
@@ -648,7 +649,7 @@ rotate_cache <- function(connection_name, view_name) {
       cache_rows <- ROracle::fetch(rs) |>
         tibble::as_tibble(.name_repair = snakecase::to_snake_case)
 
-      # TODO if reserved column names found, rename to alternate form,
+      # If reserved column names found, rename to alternate form,
       # or error if alternate form is also used
       if (any(colnames(cache_rows) %in% c("key"))) {
         if (any(colnames(cache_rows) %in% c("src_key"))) {
@@ -672,18 +673,7 @@ rotate_cache <- function(connection_name, view_name) {
 
       ROracle::dbClearResult(rs)
 
-      # 2025-10-14
-      # TODO ensure both replicate tables exist
-      # =====> YOU ARE HERE <=====
-      # So, you should be able to pick up in lib/bettr with
-      # `radian/devtools::test()` and watch this break.
-      # I just added the flag in generate_init_sql to
-      # skip_archive_table, so this is testing that.
-      # The test-query.R file also still needs to be built out;
-      # the test there only test the creation and population of
-      # the first replicate.  The second replicate needs to be
-      # tested, and I still have to validate that the rotation
-      # took place at all through the view create/replace code.
+      # Ensure both replicate tables exist
 
       cache_rows |>
         generate_init_sql(
@@ -713,15 +703,11 @@ rotate_cache <- function(connection_name, view_name) {
           skip_archive_table = TRUE
         )
 
-      # TODO find which table has the oldest rows
-      stale_rpl <- rpl1_name
-
+      # Identify the stale replicate
       stmt <- stringr::str_glue("
 SELECT '{rpl1_name}' RPL_ID, MAX(AUDIT_INSERT_DT) LAST_INSERT_DT FROM {rpl1_name}
 UNION ALL
 SELECT '{rpl2_name}' RPL_ID, MAX(AUDIT_INSERT_DT) LAST_INSERT_DT FROM {rpl2_name}")
-
-      message(stmt)
 
       conn <- get_db_conn(connection_name = connection_name)
       rs <- ROracle::dbSendQuery(
@@ -731,44 +717,76 @@ SELECT '{rpl2_name}' RPL_ID, MAX(AUDIT_INSERT_DT) LAST_INSERT_DT FROM {rpl2_name
 
       stale_rpl_rows <- ROracle::fetch(rs) |>
         tibble::as_tibble(.name_repair = snakecase::to_snake_case) |>
-        dplyr::arrange(last_insert_dt) |>
-        dplyr::slice_head(n = 1)
+        dplyr::arrange(last_insert_dt)
 
       ROracle::dbClearResult(rs)
 
-      # If we have rows for both tables and RPL1 is stale, use RPL2;
-      # otherwise use the default, RPL1
-      if (stale_rpl_rows |> dplyr::count() |> as.double() > 0 &&
-        stale_rpl_rows$rpl_id[1] == rpl1_name) {
-        stale_rpl <- rpl2_name
-      }
+      # Truncate and populate the stale replicate
+      stale_rpl <- stale_rpl_rows$rpl_id[1]
 
-      # TODO truncate the stale replicate
       conn <- get_db_conn(connection_name = connection_name)
       rs <- ROracle::dbSendQuery(
         conn = conn,
         statement = stringr::str_glue("TRUNCATE TABLE {schema_name}.{stale_rpl}")
       )
 
-      # TODO append the cached rows to the stale (now empty) replicate
       cache_rows |>
         append_rows(
           connection_name = connection_name,
           table_name = stale_rpl
         )
 
-      # TODO recreate the view and point it to the view of the now-fresh replicate
-      stmt <- stringr::str_glue(
-        "CREATE OR REPLACE VIEW R{view_name} AS (SELECT * FROM {schema_name}.V_{stale_rpl})"
+      # Hide auditing columns associated with the underlying replicate
+      cache_view_columns <- colnames(
+        cache_rows |>
+          dplyr::select(
+            !dplyr::matches("^(rpl.*key|audit_insert_dt)$")
+          )
       )
 
-      message(stmt)
+      cache_view_columns <- cache_view_columns[
+        order(cache_view_columns)
+      ] |>
+        toupper()
 
-      conn <- get_db_conn(connection_name = connection_name)
-      ROracle::dbSendQuery(
-        conn = conn,
-        statement = stmt
+      # Recreate the cache view to the now-fresh replicate
+      view_stmt <- paste(
+        stringr::str_glue("CREATE OR REPLACE VIEW C{view_name} AS (SELECT "),
+        paste(
+          cache_view_columns,
+          collapse = ", "
+        ),
+        stringr::str_glue(" FROM {schema_name}.V_{stale_rpl})"),
+        sep = ""
       )
+
+      # TODO construct view grants
+      view_grant_stmts <- stringr::str_glue(
+        "GRANT SELECT ON {schema_name}.C{view_name} TO {toupper(view_grants)}"
+      )
+
+      sql_stmts <- c(
+        view_stmt,
+        view_grant_stmts
+      )
+
+      sql_stmts <- sql_stmts[sql_stmts != ""]
+
+      message(sql_stmts)
+
+      sql_stmts |>
+        sapply(
+          \(stmt) {
+            conn <- get_db_conn(connection_name = connection_name)
+            ROracle::dbSendQuery(
+              conn = conn,
+              statement = stmt
+            )
+          }
+        )
+
+      # Caches rotated
+      TRUE
     },
 
     warning = function(warn) {
@@ -1098,7 +1116,7 @@ generate_sql_init_stmts <- function(
 )")
 
   view_grant_stmts <- stringr::str_glue(
-    "GRANT SELECT ON V_{table_name} TO {toupper(view_grants)}"
+    "GRANT SELECT ON {schema_name}.V_{table_name} TO {toupper(view_grants)}"
   ) |>
     paste0(collapse = ";;;\n")
 
@@ -1178,7 +1196,7 @@ generate_sql_init_union_view_stmt <- function(
 
   if (!is.null(view_grants)) {
     view_grant_stmts <- stringr::str_glue(
-      "GRANT SELECT ON V_{view_name} TO {toupper(view_grants)}"
+      "GRANT SELECT ON {schema_name}.V_{view_name} TO {toupper(view_grants)}"
     ) |>
       paste0(collapse = ";;;\n")
   }

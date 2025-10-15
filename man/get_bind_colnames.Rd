@@ -13,6 +13,6 @@ get_bind_colnames(sql)
 A character vector of snake_cased bind parameter names to be used in dplyr verbs.
 }
 \description{
-The query parameters to retrieve data from a database are handled in RORacle as bind parameters.
+The query parameters to retrieve data from a database are handled in ROracle as bind parameters.
 This function scans a SQL statement for ampersand-prefixed, snake_cased bind parameters.
 }

@@ -10,7 +10,8 @@ generate_init_sql(
   connection_name,
   index_id_columns = TRUE,
   index_columns = c(),
-  view_grants = c()
+  view_grants = c(),
+  skip_archive_table = FALSE
 )
 }
 \arguments{
@@ -29,6 +30,9 @@ have indexes created on them.  Defaults to TRUE.}
 
 \item{view_grants}{The names of database roles to grant SELECT permissions.
 Defaults to none.}
+
+\item{skip_archive_table}{Whether to skip ensuring an identical "ARCH_" table.
+Defaults to FALSE.}
 }
 \value{
 Nothing.  This function is called for its side effect of writing an
