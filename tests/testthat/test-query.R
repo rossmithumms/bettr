@@ -307,14 +307,16 @@ testthat::test_that(
         index_columns = c(
           "foo",
           "mumble"
-        )
+        ),
+        archive_clause = "\"frotz\" < SYSDATE - INTERVAL '1' DAY"
       )
 
     # Ensure the table exists
     rows |>
       bettr::ensure_table(
         connection_name = "app_dqhi_dev",
-        table_name = "bettr_init_sql"
+        table_name = "bettr_init_sql",
+        use_archive_table = TRUE
       )
 
     # Append rows
@@ -338,9 +340,7 @@ testthat::test_that(
     # Flush to archive
     bettr::flush_to_archive(
       connection_name = "app_dqhi_dev",
-      table_name = "bettr_init_sql",
-      stale_column = "frotz",
-      stale_dt = lubridate::now() - lubridate::days(1)
+      table_name = "bettr_init_sql"
     )
 
     # Query the archive view to ensure we see results

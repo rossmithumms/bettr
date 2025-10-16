@@ -11,7 +11,7 @@ generate_init_sql(
   index_id_columns = TRUE,
   index_columns = c(),
   view_grants = c(),
-  skip_archive_table = FALSE
+  archive_clause = as.character(NA)
 )
 }
 \arguments{
@@ -31,8 +31,9 @@ have indexes created on them.  Defaults to TRUE.}
 \item{view_grants}{The names of database roles to grant SELECT permissions.
 Defaults to none.}
 
-\item{skip_archive_table}{Whether to skip ensuring an identical "ARCH_" table.
-Defaults to FALSE.}
+\item{archive_clause}{A logical clause as a SQL literal that identifies
+stale rows in the table for the archive.  Defaults to NA, meaning no
+archive table or archive management scripts will be created.}
 }
 \value{
 Nothing.  This function is called for its side effect of writing an
@@ -52,8 +53,20 @@ The tables and views created are:
 \item \verb{V_ARCH_<TABLE_NAME>}: View to the archive table
 \item \verb{V_ALL_<TABLE_NAME>}: View to a UNION of the live and archive tables
 Indexes (which are created on all columsn ending in \verb{_id} and any
-passed in the parameter \code{index_columns}) are created on both the live
-and archive table.
-It is up to you to decide how or if to use the archive table.
+passed in the parameter \code{index_columns}) are created on the table.
+If an \code{archive_clause} is passed, an additional archive table (with the
+prefix \code{ARCH_}) will be created with the same indexes, as well as SQL
+scripts used by the function \code{flush_to_archive()}.  These SQL files
+will be named \verb{archive_get_live_<table_name>} (a SELECT statment to
+get rows for the archive table) and \verb{archive_prune_live_<table_name>}
+(a DELETE statement to delete the archived rows from the live table).
 }
+}
+\details{
+Note: The \code{archive_} and \code{prune_} files will be generated into the
+task's local SQL dir.  To use these in a different task, you will need
+to move these files yourself to that task's \verb{sql/<CONNECTION_NAME>}
+directory. In general though, to avoid the possibility of multiple
+tasks attempting to transact against the same table, it's best to use
+\code{flush_to_archive()} in the same task that calls \code{generate_init_sql()}.
 }

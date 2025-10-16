@@ -4,19 +4,36 @@
 \alias{flush_to_archive}
 \title{Flush a Table's Stale Rows to Archive}
 \usage{
-flush_to_archive(connection_name, table_name, stale_column, stale_dt)
+flush_to_archive(connection_name, table_name)
 }
 \arguments{
 \item{connection_name}{The snake_case name of the connection.}
 
 \item{table_name}{The name of the (live) table to archive.}
-
-\item{stale_column}{The datetime column used to determine staleness.}
-
-\item{stale_dt}{The datetime threshold used to determine staleness.}
 }
 \description{
-All rows with a \code{stale_column} value less than or equal to
-the \code{stale_dt} will be selected, added to the archive table
-at \verb{ARCH_<TABLE_NAME>}, and deleted from \verb{<TABLE_NAME>}.
+If \code{generate_init_sql} was used to initialize a table with an
+\code{archive_clause}, this function can be used to flush the
+contents of that table to its archive table.
+}
+\details{
+The archive table is a feature intended to enhance real-time
+query performance on the default (live) table.  By flushing data
+out of the live table and into the archive, query and
+transaction speed on the live table will stay relatively
+constant regardless of the amount of accumulated history.
+Deduplication becomes especially time-consuming as the amount
+of historical data grows.
+
+Flushing to the archive is a subjective decision to each
+data model, and in general should only be done when:
+\enumerate{
+\item Flushing to the archive improves real-time query performance
+\item The data to flush is complete
+}
+
+Here, 'complete' means we no longer expect the data to be
+updated in real-time; its working life is done.  Resulted orders,
+discharged patient stays, and closed AR accounts are all
+examples of complete data.
 }

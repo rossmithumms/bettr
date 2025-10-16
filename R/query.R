@@ -297,7 +297,7 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
     },
 
     error = function(err) {
-      message("!!! Error durring append_rows")
+      message("!!! Error during append_rows")
       message(err)
       if (exists(conn)) {
         message(ROracle::dbGetException(conn))
@@ -320,11 +320,11 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
 #' @param rows Table structure with representative data for the table to create/verify.
 #' @param connection_name The snake_case name of the connection.
 #' @param table_name The snake_case name of the table to ensure exists in the database.
-#' @param skip_archive_table Whether to skip ensuring an identical "ARCH_" table.
+#' @param use_archive_table Whether to ensure an identical "ARCH_" table.
 #' Defaults to FALSE.
 #' @return Nothing
 #' @export
-ensure_table <- function(rows, connection_name, table_name, skip_archive_table = FALSE) {
+ensure_table <- function(rows, connection_name, table_name, use_archive_table = FALSE) {
   tryCatch(
     {
       connection_name <- toupper(connection_name)
@@ -361,10 +361,16 @@ ensure_table <- function(rows, connection_name, table_name, skip_archive_table =
           )
         )
 
-        # Repeat this process for the archive table
-        if (skip_archive_table == FALSE) {
-          prepared_arch_table_name = prepare_table_name(paste("arch", table_name, sep = "_"))
-          message(stringr::str_glue("+++ use archive table: {prepared_arch_table_name}"))
+        # Repeat this process for the archive table as needed
+        if (use_archive_table) {
+          prepared_arch_table_name <- prepare_table_name(
+            paste("arch", table_name, sep = "_")
+          )
+          message(
+            stringr::str_glue(
+              "+++ use archive table: {prepared_arch_table_name}"
+            )
+          )
 
           ROracle::dbWriteTable(
             conn = conn,
@@ -406,7 +412,7 @@ ensure_table <- function(rows, connection_name, table_name, skip_archive_table =
     },
 
     error = function(err) {
-      message("!!! Error durring ensure_table")
+      message("!!! Error during ensure_table")
       message(err)
       if (exists(conn)) {
         message(ROracle::dbGetException(conn))
@@ -457,7 +463,7 @@ exists_table <- function(connection_name, table_name) {
     },
 
     error = function(err) {
-      message("!!! Error durring exists_table")
+      message("!!! Error during exists_table")
       message(err)
       if (exists(conn)) {
         message(ROracle::dbGetException(conn))
@@ -522,82 +528,62 @@ drop_table <- function(connection_name, table_name) {
 
 #' Flush a Table's Stale Rows to Archive
 #' 
-#' All rows with a `stale_column` value less than or equal to
-#' the `stale_dt` will be selected, added to the archive table
-#' at `ARCH_<TABLE_NAME>`, and deleted from `<TABLE_NAME>`.
+#' If `generate_init_sql` was used to initialize a table with an
+#' `archive_clause`, this function can be used to flush the
+#' contents of that table to its archive table.
+#' 
+#' The archive table is a feature intended to enhance real-time
+#' query performance on the default (live) table.  By flushing data
+#' out of the live table and into the archive, query and
+#' transaction speed on the live table will stay relatively
+#' constant regardless of the amount of accumulated history.
+#' Deduplication becomes especially time-consuming as the amount
+#' of historical data grows.
+#' 
+#' Flushing to the archive is a subjective decision to each
+#' data model, and in general should only be done when:
+#' 
+#' 1. Flushing to the archive improves real-time query performance
+#' 2. The data to flush is complete
+#' 
+#' Here, 'complete' means we no longer expect the data to be
+#' updated in real-time; its working life is done.  Resulted orders,
+#' discharged patient stays, and closed AR accounts are all
+#' examples of complete data.
 #' 
 #' @param connection_name The snake_case name of the connection.
 #' @param table_name The name of the (live) table to archive.
-#' @param stale_column The datetime column used to determine staleness.
-#' @param stale_dt The datetime threshold used to determine staleness.
 #' @export
 flush_to_archive <- function(
   connection_name,
-  table_name,
-  stale_column,
-  stale_dt
+  table_name
 ) {
-  tryCatch(
-    {
-      live_table_name <- prepare_table_name(table_name)
-      archive_table_name <- prepare_table_name(paste("arch", table_name, sep = "_"))
-      stale_column <- tolower(prepare_table_name(stale_column))
-      connection_name <- toupper(connection_name)
-      schema_name <- get_db_username(connection_name)
 
-      # Select rows from the live table
-      conn <- get_db_conn(connection_name = connection_name)
+  archive_table_name <- prepare_table_name(stringr::str_glue(
+    "arch_{table_name}"
+  ))
 
-      rs <- ROracle::dbSendQuery(
-        conn = conn,
-        statement = stringr::str_glue(
-          "SELECT * FROM {live_table_name} WHERE \"{stale_column}\" <= &stale_dt"
-        ),
-        data.frame(stale_dt = stale_dt)
-      )
+  # Select rows from the live table
+  archive_rows <- get_rows(
+    connection_name = connection_name,
+    sql = stringr::str_glue("archive_get_live_{table_name}")
+  )
 
-      stale_rows <- ROracle::fetch(rs) |>
-        tibble::as_tibble(.name_repair = snakecase::to_snake_case) |>
-        dplyr::select(
-          -c(key, audit_insert_dt)
-        )
+  # Add rows to the archive
+  archive_rows |>
+    append_rows(
+      connection_name = connection_name,
+      table_name = stringr::str_glue("{archive_table_name}")
+    )
 
-      ROracle::dbClearResult(rs)
+  # Delete rows from the live table
+  execute_stmts(
+    connection_name = connection_name,
+    sql_file = stringr::str_glue("archive_prune_live_{table_name}")
+  )
 
-      # Add rows to the archive
-      stale_rows |>
-        append_rows(
-          connection_name = connection_name,
-          table_name = archive_table_name
-        )
-
-      # Delete rows from the live table
-      conn <- get_db_conn(connection_name = connection_name)
-      ROracle::dbSendQuery(
-        conn = conn,
-        statement = stringr::str_glue(
-          "DELETE FROM {live_table_name} WHERE \"{stale_column}\" <= &STALE_DT"
-        ),
-        data.frame(stale_dt = stale_dt)
-      )
-    },
-
-    warning = function(warn) {
-      warning(warn)
-    },
-
-    error = function(err) {
-      message("!!! Error durring flush_to_archive")
-      message(err)
-      if (exists(conn)) {
-        message(ROracle::dbGetException(conn))
-      }
-      stop(err)
-    },
-
-    finally = {
-      close_db_conn_pool()
-    }
+  message(stringr::str_glue(
+    "... archived {archive_rows |> dplyr::count()} rows")
   )
 }
 
@@ -678,29 +664,25 @@ rotate_cache <- function(connection_name, view_name, view_grants = c()) {
       cache_rows |>
         generate_init_sql(
           connection_name = connection_name,
-          table_name = rpl1_name,
-          skip_archive_table = TRUE
+          table_name = rpl1_name
         )
 
       cache_rows |>
         generate_init_sql(
           connection_name = connection_name,
-          table_name = rpl2_name,
-          skip_archive_table = TRUE
+          table_name = rpl2_name
         )
 
       cache_rows |>
         ensure_table(
           connection_name = connection_name,
-          table_name = rpl1_name,
-          skip_archive_table = TRUE
+          table_name = rpl1_name
         )
 
       cache_rows |>
         ensure_table(
           connection_name = connection_name,
-          table_name = rpl2_name,
-          skip_archive_table = TRUE
+          table_name = rpl2_name
         )
 
       # Identify the stale replicate
@@ -760,7 +742,7 @@ SELECT '{rpl2_name}' RPL_ID, MAX(AUDIT_INSERT_DT) LAST_INSERT_DT FROM {rpl2_name
         sep = ""
       )
 
-      # TODO construct view grants
+      # Construct view grants
       view_grant_stmts <- stringr::str_glue(
         "GRANT SELECT ON {schema_name}.C{view_name} TO {toupper(view_grants)}"
       )
@@ -770,11 +752,7 @@ SELECT '{rpl2_name}' RPL_ID, MAX(AUDIT_INSERT_DT) LAST_INSERT_DT FROM {rpl2_name
         view_grant_stmts
       )
 
-      sql_stmts <- sql_stmts[sql_stmts != ""]
-
-      message(sql_stmts)
-
-      sql_stmts |>
+      sql_stmts[sql_stmts != ""] |>
         sapply(
           \(stmt) {
             conn <- get_db_conn(connection_name = connection_name)
@@ -785,7 +763,7 @@ SELECT '{rpl2_name}' RPL_ID, MAX(AUDIT_INSERT_DT) LAST_INSERT_DT FROM {rpl2_name
           }
         )
 
-      # Caches rotated
+      message(stringr::str_glue("... C{view_name} cache rotated"))
       TRUE
     },
 
@@ -794,7 +772,7 @@ SELECT '{rpl2_name}' RPL_ID, MAX(AUDIT_INSERT_DT) LAST_INSERT_DT FROM {rpl2_name
     },
 
     error = function(err) {
-      message("!!! Error durring rotate_cache")
+      message("!!! Error during rotate_cache")
       message(err)
       if (exists(conn)) {
         message(ROracle::dbGetException(conn))
@@ -932,9 +910,21 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
 #' - `V_ARCH_<TABLE_NAME>`: View to the archive table
 #' - `V_ALL_<TABLE_NAME>`: View to a UNION of the live and archive tables
 #' Indexes (which are created on all columsn ending in `_id` and any
-#' passed in the parameter `index_columns`) are created on both the live
-#' and archive table.
-#' It is up to you to decide how or if to use the archive table.
+#' passed in the parameter `index_columns`) are created on the table.
+#' If an `archive_clause` is passed, an additional archive table (with the
+#' prefix `ARCH_`) will be created with the same indexes, as well as SQL
+#' scripts used by the function `flush_to_archive()`.  These SQL files
+#' will be named `archive_get_live_<table_name>` (a SELECT statment to 
+#' get rows for the archive table) and `archive_prune_live_<table_name>`
+#' (a DELETE statement to delete the archived rows from the live table).
+#' 
+#' Note: The `archive_` and `prune_` files will be generated into the
+#' task's local SQL dir.  To use these in a different task, you will need
+#' to move these files yourself to that task's `sql/<CONNECTION_NAME>`
+#' directory. In general though, to avoid the possibility of multiple
+#' tasks attempting to transact against the same table, it's best to use
+#' `flush_to_archive()` in the same task that calls `generate_init_sql()`.
+#' 
 #' @param rows Rows of data from an extract that are representative of the data
 #' to be stored in the new table and presented in a new view.
 #' @param table_name The name of the table.
@@ -945,8 +935,9 @@ execute_stmts <- function(binds = tibble::tibble(), connection_name, sql_file,
 #' `index_id_columns` = TRUE, this will supplement those columns.
 #' @param view_grants The names of database roles to grant SELECT permissions.
 #' Defaults to none.
-#' @param skip_archive_table Whether to skip ensuring an identical "ARCH_" table.
-#' Defaults to FALSE.
+#' @param archive_clause A logical clause as a SQL literal that identifies
+#' stale rows in the table for the archive.  Defaults to NA, meaning no
+#' archive table or archive management scripts will be created.
 #' @return Nothing.  This function is called for its side effect of writing an
 #' initialization SQL file to the hard disk under the path given at the SQL_DIR
 #' environment variable.  Defaults to none.
@@ -958,10 +949,13 @@ generate_init_sql <- function(
   index_id_columns = TRUE,
   index_columns = c(),
   view_grants = c(),
-  skip_archive_table = FALSE) {
+  archive_clause = as.character(NA)) {
 
-  sql_file_name <- stringr::str_glue("init_{tolower(table_name)}.sql")
   sql_dir <- Sys.getenv("SQL_DIR")
+
+  sql_init_file_name <- stringr::str_glue(
+    "init_{tolower(table_name)}.sql"
+  )
 
   # Generate SQL statements for the live (default) table
   sql_init_live <- generate_sql_init_stmts(
@@ -976,8 +970,22 @@ generate_init_sql <- function(
   sql_init_archive <- as.character("")
   sql_init_union <- as.character("")
 
-  if (skip_archive_table == FALSE) {
-    # Generate SQL statements for the archive table
+  if (!is.na(archive_clause)) {
+    sql_archive_file_name <- stringr::str_glue(
+      "archive_get_live_{tolower(table_name)}.sql"
+    )
+
+    sql_prune_file_name <- stringr::str_glue(
+      "archive_prune_live_{tolower(table_name)}.sql"
+    )
+
+    sql_archive <- as.character("")
+    sql_prune <- as.character("")
+
+    # Use the prepared table name inside SQL statements
+    prepared_table_name <- prepare_table_name(table_name)
+
+    # Generate a SQL statement to create the archive table
     sql_init_archive <- generate_sql_init_stmts(
       rows = rows,
       table_name = stringr::str_glue("arch_{table_name}"),
@@ -987,7 +995,7 @@ generate_init_sql <- function(
       view_grants = view_grants
     )
 
-    # Generate SQL statements for the union view
+    # Generate a SQL statement to create live/archive union view
     sql_init_union <- generate_sql_init_union_view_stmt(
       rows = rows,
       table_names = c(
@@ -998,32 +1006,70 @@ generate_init_sql <- function(
       connection_name = connection_name,
       view_grants = view_grants
     )
+
+    # Generate a SQL statement to select live rows to archive
+    sql_archive <- stringr::str_glue(
+      "SELECT * FROM {prepared_table_name} WHERE {archive_clause}"
+    )
+
+    # Generate a SQL statement to prune live rows
+    sql_prune <- stringr::str_glue(
+      "DELETE FROM {prepared_table_name} WHERE {archive_clause}"
+    )
+
+    sql_archive_file <- file(paste(
+      sql_dir,
+      toupper(connection_name),
+      sql_archive_file_name,
+      sep = .Platform$file.sep
+    ))
+
+    writeLines(
+      sql_archive,
+      sql_archive_file
+    )
+
+    close(sql_archive_file)
+
+    sql_prune_file <- file(paste(
+      sql_dir,
+      toupper(connection_name),
+      sql_prune_file_name,
+      sep = .Platform$file.sep
+    ))
+
+    writeLines(
+      sql_prune,
+      sql_prune_file
+    )
+
+    close(sql_prune_file)
   }
 
-  sql_stmts <- c(
+  sql_init_stmts <- c(
     sql_init_live,
     sql_init_archive,
     sql_init_union
   )
 
-  sql_stmts <- sql_stmts[sql_stmts != ""]
+  sql_init_stmts <- sql_init_stmts[sql_init_stmts != ""]
 
-  init_sql_file <- file(paste(
+  sql_init_file <- file(paste(
     sql_dir,
     toupper(connection_name),
-    sql_file_name,
+    sql_init_file_name,
     sep = .Platform$file.sep
   ))
 
   writeLines(
     paste(
-      sql_stmts,
+      sql_init_stmts,
       collapse = ";;;\n"
     ),
-    init_sql_file
+    sql_init_file
   )
 
-  close(init_sql_file)
+  close(sql_init_file)
 }
 
 #' Generate ETL Initialization SQL
