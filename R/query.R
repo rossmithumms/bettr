@@ -569,22 +569,26 @@ flush_to_archive <- function(
     sql = stringr::str_glue("archive_get_live_{table_name}")
   )
 
-  # Add rows to the archive
-  archive_rows |>
-    append_rows(
+  if (archive_rows |> dplyr::count() |> as.double() > 0) {
+    # Add rows to the archive
+    archive_rows |>
+      append_rows(
+        connection_name = connection_name,
+        table_name = stringr::str_glue("{archive_table_name}")
+      )
+
+    # Delete rows from the live table
+    execute_stmts(
       connection_name = connection_name,
-      table_name = stringr::str_glue("{archive_table_name}")
+      sql_file = stringr::str_glue("archive_prune_live_{table_name}")
     )
 
-  # Delete rows from the live table
-  execute_stmts(
-    connection_name = connection_name,
-    sql_file = stringr::str_glue("archive_prune_live_{table_name}")
-  )
-
-  message(stringr::str_glue(
-    "... archived {archive_rows |> dplyr::count()} rows")
-  )
+    message(stringr::str_glue(
+      "... archived {archive_rows |> dplyr::count()} rows")
+    )
+  } else {
+    message("... no rows archived")
+  }
 }
 
 #' Rotate the Contents of a View Cache
