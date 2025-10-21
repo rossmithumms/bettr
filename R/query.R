@@ -569,13 +569,28 @@ flush_to_archive <- function(
     sql = stringr::str_glue("archive_get_live_{table_name}")
   )
 
+
   if (archive_rows |> dplyr::count() |> as.double() > 0) {
-    # Add rows to the archive
-    archive_rows |>
-      append_rows(
-        connection_name = connection_name,
-        table_name = stringr::str_glue("{archive_table_name}")
-      )
+    # TODO to avoid buffer overflow, split the archive_rows
+    # into strides of 10,000
+
+    stride_size <- 10000
+    stride_ct <- ceiling(as.double(dplyr::count(archive_rows)) / stride_size)
+
+    for (stride in seq(stride_ct)) {
+      # Add rows to the archive
+      message(stringr::str_glue("... appending {stride}/{stride_ct} strides"))
+
+      archive_rows |>
+        dplyr::slice(
+          (1 + (stride - 1) * stride_size):(stride * stride_size)
+        ) |>
+        append_rows(
+          connection_name = connection_name,
+          table_name = stringr::str_glue("{archive_table_name}")
+        )
+    }
+
 
     # Delete rows from the live table
     execute_stmts(

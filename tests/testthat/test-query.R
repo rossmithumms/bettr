@@ -24,15 +24,15 @@ withr::defer(
       },
       error = \(e) {}
     )
-    # tryCatch(
-    #   {
-    #     bettr::execute_stmts(
-    #       connection_name = "app_dqhi_dev",
-    #       sql_file = "drop_bettr_cache_test"
-    #     )
-    #   },
-    #   error = \(e) {}
-    # )
+    tryCatch(
+      {
+        bettr::execute_stmts(
+          connection_name = "app_dqhi_dev",
+          sql_file = "drop_bettr_cache_test"
+        )
+      },
+      error = \(e) {}
+    )
   }
 )
 
@@ -291,13 +291,22 @@ testthat::test_that(
   "We can generate working initialization SQL with views and archive tables",
   {
 
-    # Get some test test data
+    # Get some test data
+    # Use more than 20,000 rows to test the strided archival append logic
     rows <- tibble::tibble(
       this = c("that", "other"),
       foo = c("boo", "bar"),
       mumble = c(1, 2),
       frotz = c(lubridate::now(), lubridate::now() - lubridate::days(2))
-    )
+    ) |>
+      dplyr::bind_rows(
+        tibble::tibble(
+          this = "other",
+          foo = "baz",
+          mumble = seq.int(from = 3, to = 20000),
+          frotz = lubridate::now() - lubridate::days(2)
+        )
+      )
 
     # Generate init SQL file
     rows |>
@@ -332,9 +341,21 @@ testthat::test_that(
       sql = "get_all_bettr_init_sql"
     )
 
-    # Should have 2 rows
+    # Should have 20000 rows
     testthat::expect_equal(
-      as.double(dplyr::count(rs)), 2
+      as.double(dplyr::count(rs)), 20000
+    )
+
+    # Should have no duplicates in the "all" view
+    testthat::expect_equal(
+      rs |>
+        dplyr::group_by(mumble) |>
+        dplyr::summarise(row_ct = dplyr::n()) |>
+        dplyr::ungroup() |>
+        dplyr::filter(row_ct > 1) |>
+        dplyr::count() |>
+        as.double(),
+      0
     )
 
     # Flush to archive
@@ -349,9 +370,21 @@ testthat::test_that(
       sql = "get_arch_bettr_init_sql"
     )
 
-    # Should have 1 row
+    # Should have 19999 rows
     testthat::expect_equal(
-      as.double(dplyr::count(rs)), 1
+      as.double(dplyr::count(rs)), 19999
+    )
+
+    # Should have no duplicates in the "arch" view
+    testthat::expect_equal(
+      rs |>
+        dplyr::group_by(mumble) |>
+        dplyr::summarise(row_ct = dplyr::n()) |>
+        dplyr::ungroup() |>
+        dplyr::filter(row_ct > 1) |>
+        dplyr::count() |>
+        as.double(),
+      0
     )
 
     # Teardown
