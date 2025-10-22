@@ -246,6 +246,7 @@ get_rows_nobinds <- function(connection_name, sql) {
 #' If the table does not exist, it is created with `ensure_table()`.
 #' Note:
 #' * The schema for created tables is expected to be the database username.
+#' * Rows are appended in batches (strides) of 10,000 to avoid buffer overflow.
 #'
 #' @param rows a data frame, data.table, or tibble with rows of values to insert
 #' @param connection_name The snake_case name of the connection.
@@ -259,6 +260,8 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
     {
       connection_name <- toupper(connection_name)
       schema <- toupper(get_db_username(connection_name))
+      stride_size <- 10000
+      stride_ct <- ceiling(as.double(dplyr::count(rows)) / stride_size)
 
       # If the table does not exist yet, create and initialize it
       ensure_table(
@@ -274,19 +277,30 @@ append_rows <- function(rows, connection_name, table_name, suppress_bind_logging
 
       # Append to the table, assuming it exists already
       conn <- get_db_conn(connection_name = connection_name)
-      ROracle::dbWriteTable(
-        conn = conn,
-        name = table_name,
-        value = rows |>
-          dplyr::mutate(
-            key = as.numeric(NA),
-            audit_insert_dt = as.Date(NA)
-          ),
-        schema = schema,
-        row.names = FALSE,
-        append = TRUE,
-        ora.number = FALSE
-      )
+
+      for (stride in seq(stride_ct)) {
+        # Add rows to the archive
+        message(stringr::str_glue(
+          "... appending stride {stride} of {stride_ct}"
+        ))
+
+        ROracle::dbWriteTable(
+          conn = conn,
+          name = table_name,
+          value = rows |>
+            dplyr::slice(
+              (1 + (stride - 1) * stride_size):(stride * stride_size)
+            ) |>
+            dplyr::mutate(
+              key = as.numeric(NA),
+              audit_insert_dt = as.Date(NA)
+            ),
+          schema = schema,
+          row.names = FALSE,
+          append = TRUE,
+          ora.number = FALSE
+        )
+      }
 
       ROracle::dbCommit(conn = conn)
       message(stringr::str_glue("+++ appended {rows |> dplyr::count()} rows"))
@@ -569,28 +583,12 @@ flush_to_archive <- function(
     sql = stringr::str_glue("archive_get_live_{table_name}")
   )
 
-
   if (archive_rows |> dplyr::count() |> as.double() > 0) {
-    # TODO to avoid buffer overflow, split the archive_rows
-    # into strides of 10,000
-
-    stride_size <- 10000
-    stride_ct <- ceiling(as.double(dplyr::count(archive_rows)) / stride_size)
-
-    for (stride in seq(stride_ct)) {
-      # Add rows to the archive
-      message(stringr::str_glue("... appending {stride}/{stride_ct} strides"))
-
-      archive_rows |>
-        dplyr::slice(
-          (1 + (stride - 1) * stride_size):(stride * stride_size)
-        ) |>
-        append_rows(
-          connection_name = connection_name,
-          table_name = stringr::str_glue("{archive_table_name}")
-        )
-    }
-
+    archive_rows |>
+      append_rows(
+        connection_name = connection_name,
+        table_name = stringr::str_glue("{archive_table_name}")
+      )
 
     # Delete rows from the live table
     execute_stmts(

@@ -23,5 +23,6 @@ If the table does not exist, it is created with \code{ensure_table()}.
 Note:
 \itemize{
 \item The schema for created tables is expected to be the database username.
+\item Rows are appended in batches (strides) of 10,000 to avoid buffer overflow.
 }
 }
