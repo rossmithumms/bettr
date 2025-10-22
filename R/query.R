@@ -442,10 +442,11 @@ ensure_table <- function(rows, connection_name, table_name, use_archive_table = 
 
 #' Check if a Table Exists
 #'
-#' Implementing this function here because ROracle::dbExistsTable is being weird.
+#' Returns TRUE if a table exists at the given connection by
+#' the given name.
 #'
 #' @param connection_name The snake_case name of the connection.
-#' @param table_name The snake_case name of the table to drop.
+#' @param table_name The snake_case name of the table to check.
 #' @export
 exists_table <- function(connection_name, table_name) {
   tryCatch(
@@ -469,7 +470,7 @@ exists_table <- function(connection_name, table_name) {
       )
       result <- ROracle::fetch(rs)
       ROracle::dbClearResult(rs)
-      0 < dplyr::count(result)
+      TRUE == (0 < as.double(dplyr::count(result)))
     },
 
     warning = function(warn) {
@@ -531,6 +532,117 @@ drop_table <- function(connection_name, table_name) {
 
     error = function(err) {
       message(ROracle::dbGetException(conn))
+      stop(err)
+    },
+
+    finally = {
+      close_db_conn_pool()
+    }
+  )
+}
+
+#' Ensure a View Exists
+#' 
+#' Calling this function will check to see if a view exists
+#' at the connection with the given name.
+#' If it does not exist, bettr will look for an initialization
+#' file in `SQL_DIR/<CONNECTION_NAME>/init_<view_name>.sql`.
+#' 
+#' @param connection_name The snake_case name of the connection.
+#' @param view_name The snake_case name of the view to ensure
+#' exists in the database.
+#' @return TRUE if view exists or was initialized successfully.
+#' @export
+ensure_view <- function(connection_name, view_name) {
+  tryCatch(
+    {
+      connection_name <- toupper(connection_name)
+      conn <- get_db_conn(connection_name = connection_name)
+      prepared_view_name <- prepare_table_name(view_name)
+
+      # If the view does not exist yet, create it
+      view_exists <- exists_view(
+        connection_name = connection_name,
+        view_name = prepared_view_name
+      )
+
+      conn <- get_db_conn(connection_name = connection_name)
+
+      if (view_exists == FALSE) {
+        execute_stmts(
+          connection_name = connection_name,
+          sql = tolower(stringr::str_glue("init_{view_name}"))
+        )
+
+        message(stringr::str_glue("+++ initialized view: {prepared_view_name}"))
+      } else {
+        message(stringr::str_glue("--- view already exists: {prepared_view_name}"))
+      }
+
+      TRUE
+    },
+
+    warning = function(warn) {
+      warning(warn)
+    },
+
+    error = function(err) {
+      message("!!! Error during ensure_view")
+      message(err)
+      if (exists(conn)) {
+        message(ROracle::dbGetException(conn))
+      }
+      stop(err)
+    },
+
+    finally = {
+      close_db_conn_pool()
+    }
+  )
+}
+
+#' Check if a View Exists
+#'
+#' Returns TRUE if a view exists at the given connection by
+#' the given name.
+#'
+#' @param connection_name The snake_case name of the connection.
+#' @param view_name The snake_case name of the view to check.
+#' @export
+exists_view <- function(connection_name, view_name) {
+  tryCatch(
+    {
+      connection_name <- toupper(connection_name)
+      conn <- get_db_conn(connection_name = connection_name)
+      view_name <- prepare_table_name(view_name)
+      bad_characters <- stringr::str_detect(view_name, "[^_A-Za-z0-9]")
+
+      if (bad_characters == TRUE) {
+        stop("!!! Invalid characters detected in view name; stopping")
+      }
+
+      rs <- ROracle::dbSendQuery(
+        conn = conn,
+        statement = stringr::str_glue(
+          "SELECT VIEW_NAME FROM USER_VIEWS WHERE UPPER(VIEW_NAME) = &view_name"
+        ),
+        data.frame(view_name = view_name)
+      )
+      result <- ROracle::fetch(rs)
+      ROracle::dbClearResult(rs)
+      TRUE == (0 < as.double(dplyr::count(result)))
+    },
+
+    warning = function(warn) {
+      warning(warn)
+    },
+
+    error = function(err) {
+      message("!!! Error during exists_view")
+      message(err)
+      if (exists(conn)) {
+        message(ROracle::dbGetException(conn))
+      }
       stop(err)
     },
 

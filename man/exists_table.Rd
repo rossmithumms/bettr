@@ -9,8 +9,9 @@ exists_table(connection_name, table_name)
 \arguments{
 \item{connection_name}{The snake_case name of the connection.}
 
-\item{table_name}{The snake_case name of the table to drop.}
+\item{table_name}{The snake_case name of the table to check.}
 }
 \description{
-Implementing this function here because ROracle::dbExistsTable is being weird.
+Returns TRUE if a table exists at the given connection by
+the given name.
 }

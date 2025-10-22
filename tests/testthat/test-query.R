@@ -432,10 +432,26 @@ testthat::test_that(
         table_name = "bettr_cache_test"
       )
 
-    # Initialize a view on this data; this is what we will cache
-    bettr::execute_stmts(
+    # Does this view exist?  (It shouldn't)
+    testthat::expect_equal(
+      bettr::exists_view(
+        connection_name = "app_dqhi_dev",
+        "v_my_cache_test"
+      ), FALSE
+    )
+
+    # Ensure it exists
+    bettr::ensure_view(
       connection_name = "app_dqhi_dev",
-      sql_file = "init_v_my_cache_test"
+      view_name = "v_my_cache_test"
+    )
+
+    # Does the view exist? (It should)
+    testthat::expect_equal(
+      bettr::exists_view(
+        connection_name = "app_dqhi_dev",
+        "v_my_cache_test"
+      ), TRUE
     )
 
     # ===== FIRST ROTATION
