@@ -177,8 +177,73 @@ testthat::test_that("all bettr tests pass", {
 
   # Because this task is designed to fail, we need to clean out
   # the current test tasks and refresh with ones that will
-  # process successfully.
+  # process successfully
   # Delete them now and set up a new set of tasks for testing.
+  task_cleanup()
+  table_cleanup()
+
+  #############################################################################
+  print("---------- run_next_job_in_queue halts process on first error")
+  added_tasks <- tibble::tibble(
+    bettr_task_git_project = c("bettr", "bettr", "bettr"),
+    bettr_task_git_branch = c("feature/task", "feature/task", "feature/task"),
+    bettr_task_name = c("task_test_before", "task_test_error_during", "task_test_after"),
+    bettr_task_job_comment = c("__TEST__", "__TEST__", "__TEST__"),
+    bettr_task_job_priority = c(1, 1, 1)
+  )
+
+  added_tasks |> bettr::add_job_to_host()
+
+  did_error <- FALSE
+
+  tryCatch(
+    {
+      bettr::run_next_job_in_queue(
+        project = "bettr",
+        branch = "feature/task",
+        suppress_task_errors = FALSE
+      )
+    },
+    error = \(err) {
+      did_error <<- TRUE
+    }
+  )
+
+  testthat::expect_equal(did_error, TRUE)
+
+  task_cleanup()
+  table_cleanup()
+
+  #############################################################################
+  print("---------- run_next_job_in_queue halts job but not process on first error")
+  added_tasks <- tibble::tibble(
+    bettr_task_git_project = c("bettr", "bettr", "bettr"),
+    bettr_task_git_branch = c("feature/task", "feature/task", "feature/task"),
+    bettr_task_name = c("task_test_before", "task_test_error_during", "task_test_after"),
+    bettr_task_job_comment = c("__TEST__", "__TEST__", "__TEST__"),
+    bettr_task_job_priority = c(1, 1, 1)
+  )
+
+  added_tasks |> bettr::add_job_to_host()
+
+  bettr::run_next_job_in_queue(
+    project = "bettr",
+    branch = "feature/task",
+    stop_on_first_error = TRUE
+  )
+
+  task_test_rows <- bettr::get_rows(
+    connection_name = "app_dqhi_dev",
+    sql = "get_bettr_job_tasks"
+  )
+
+  message(stringr::str_glue("+++ task_test_rows: {task_test_rows}"))
+
+  # Statuses should be, in order: 30, 20, 0
+  testthat::expect_equal(task_test_rows$last_status[1] |> as.double(), 30)
+  testthat::expect_equal(task_test_rows$last_status[2] |> as.double(), 20)
+  testthat::expect_equal(task_test_rows$last_status[3] |> as.double(), 0)
+
   task_cleanup()
   table_cleanup()
 
