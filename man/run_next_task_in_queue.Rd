@@ -6,7 +6,6 @@
 \usage{
 run_next_task_in_queue(
   project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
-  branch = Sys.getenv("BETTR_TASK_GIT_BRANCH"),
   incl_live_refresh = TRUE,
   incl_historical_refresh = TRUE,
   return_result = FALSE,
@@ -16,9 +15,6 @@ run_next_task_in_queue(
 \arguments{
 \item{project}{String name of the project, used to
 filter for eligible tasks.}
-
-\item{branch}{String name of the project branch, used
-to filter for eligible tasks.}
 
 \item{incl_live_refresh}{Boolean Indicates whether live
 refresh tasks (with an opt_expiry_cache_mins > -1) should
@@ -37,8 +33,8 @@ Defaults to FALSE.}
 of the subprocess standard out and error. Defaults to FALSE.}
 }
 \description{
-This uses the provided git repository (project) and
-branch name to query the host for the next runnable
+This uses the provided git repository (project)
+to query the host for the next runnable
 task.  This is the first row retrieved by this SQL:
 \code{"{system.file(package = 'bettr')}/sql/BETTR_HOST/get_next_bettr_task.sql"}
 }

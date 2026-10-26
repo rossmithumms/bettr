@@ -14,8 +14,6 @@
 #'
 #' - bettr_task_git_project: Required.  Name of the git repository
 #'   where the task R file is stored. (e.g., `phlebotomy`).
-#' - bettr_task_git_branch: Required.  Name of the git branch where
-#'   the source code is stored.
 #' - bettr_task_git_commit: Optional.  Hash identifier of the git
 #'   commit matching the task R file.  This is intended for auditing
 #'   and validating only.
@@ -74,7 +72,6 @@
 get_bettr_task_defaults <- function() {
   tibble::tibble(
     bettr_task_git_project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
-    bettr_task_git_branch = Sys.getenv("BETTR_TASK_GIT_BRANCH"),
     bettr_task_git_commit = Sys.getenv("BETTR_TASK_GIT_COMMIT"),
     bettr_task_job_comment = as.character(NA),
     bettr_task_job_id = as.double(-1),
@@ -148,8 +145,8 @@ add_job_to_host <- function(bettr_tasks) {
 
 #' Run Next Project Job in Better Queue
 #' 
-#' This uses the provided git repository (project) and
-#' branch name to query the host for the next runnable
+#' This uses the provided git repository (project) to
+#' query the host for the next runnable
 #' job, being a whole group of tasks.
 #' Note that this will attempt to rerun, in order, all
 #' the tasks under the job, not just those expired,
@@ -159,8 +156,6 @@ add_job_to_host <- function(bettr_tasks) {
 #' 
 #' @param project String name of the project, used to
 #' filter for eligible jobs.
-#' @param branch String name of the project branch, used
-#' to filter for eligible jobs.
 #' @param incl_live_refresh Boolean Indicates whether live
 #' refresh tasks (with an opt_expiry_cache_mins > -1) should
 #' be considered for the next job.  Defaults to TRUE.
@@ -186,7 +181,6 @@ add_job_to_host <- function(bettr_tasks) {
 #' @export
 run_next_job_in_queue <- function(
   project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
-  branch = Sys.getenv("BETTR_TASK_GIT_BRANCH"),
   incl_live_refresh = TRUE,
   incl_historical_refresh = TRUE,
   return_result = FALSE,
@@ -195,7 +189,6 @@ run_next_job_in_queue <- function(
   stop_on_first_error = FALSE) {
   next_bettr_job <- tibble::tibble(
     bettr_task_git_project = project,
-    bettr_task_git_branch = branch,
     incl_live_refresh = dplyr::if_else(
       incl_live_refresh, 1, 0
     ),
@@ -293,15 +286,13 @@ run_next_job_in_queue <- function(
 
 #' Run Next Project Task in Bettr Queue
 #'
-#' This uses the provided git repository (project) and
-#' branch name to query the host for the next runnable
+#' This uses the provided git repository (project) 
+#' to query the host for the next runnable
 #' task.  This is the first row retrieved by this SQL:
 #' `"{system.file(package = 'bettr')}/sql/BETTR_HOST/get_next_bettr_task.sql"`
 #'
 #' @param project String name of the project, used to
 #' filter for eligible tasks.
-#' @param branch String name of the project branch, used
-#' to filter for eligible tasks.
 #' @param incl_live_refresh Boolean Indicates whether live
 #' refresh tasks (with an opt_expiry_cache_mins > -1) should
 #' be considered for the next job.  Defaults to TRUE.
@@ -317,14 +308,12 @@ run_next_job_in_queue <- function(
 #' @export
 run_next_task_in_queue <- function(
   project = Sys.getenv("BETTR_TASK_GIT_PROJECT"),
-  branch = Sys.getenv("BETTR_TASK_GIT_BRANCH"),
   incl_live_refresh = TRUE,
   incl_historical_refresh = TRUE,
   return_result = FALSE,
   suppress_logging = FALSE) {
   next_bettr_task <- tibble::tibble(
     bettr_task_git_project = project,
-    bettr_task_git_branch = branch,
     incl_live_refresh = dplyr::if_else(
       incl_live_refresh, 1, 0
     ),

@@ -42,7 +42,6 @@ testthat::test_that("all bettr tests pass", {
 
   added_tasks <- tibble::tibble(
     bettr_task_git_project = c("bettr", "bettr", "bettr"),
-    bettr_task_git_branch = c("feature/task", "feature/task", "feature/task"),
     bettr_task_name = c("task_test_before", "task_test_error_during", "task_test_after"),
     bettr_task_job_comment = c("__TEST__", "__TEST__", "__TEST__"),
     bettr_task_job_priority = c(1, 1, 1)
@@ -55,7 +54,6 @@ testthat::test_that("all bettr tests pass", {
 
   bettr_task <- tibble::tibble(
     bettr_task_git_project = "bettr",
-    bettr_task_git_branch = "feature/task",
     incl_live_refresh = 1,
     incl_historical_refresh = 1
   ) |>
@@ -85,7 +83,6 @@ testthat::test_that("all bettr tests pass", {
 
   bettr_job <- tibble::tibble(
     bettr_task_git_project = "bettr",
-    bettr_task_git_branch = "feature/task",
     incl_live_refresh = 1,
     incl_historical_refresh = 1
   ) |>
@@ -118,7 +115,6 @@ testthat::test_that("all bettr tests pass", {
 
   task_result <- bettr::run_next_task_in_queue(
     project = "bettr",
-    branch = "feature/task",
     return_result = TRUE
   )
 
@@ -166,7 +162,6 @@ testthat::test_that("all bettr tests pass", {
   # task_test_error_during
   task_result <- bettr::run_next_task_in_queue(
     project = "bettr",
-    branch = "feature/task",
     return_result = TRUE
   )
 
@@ -186,7 +181,6 @@ testthat::test_that("all bettr tests pass", {
   print("---------- run_next_job_in_queue halts process on first error")
   added_tasks <- tibble::tibble(
     bettr_task_git_project = c("bettr", "bettr", "bettr"),
-    bettr_task_git_branch = c("feature/task", "feature/task", "feature/task"),
     bettr_task_name = c("task_test_before", "task_test_error_during", "task_test_after"),
     bettr_task_job_comment = c("__TEST__", "__TEST__", "__TEST__"),
     bettr_task_job_priority = c(1, 1, 1)
@@ -200,7 +194,6 @@ testthat::test_that("all bettr tests pass", {
     {
       bettr::run_next_job_in_queue(
         project = "bettr",
-        branch = "feature/task",
         suppress_task_errors = FALSE
       )
     },
@@ -218,7 +211,6 @@ testthat::test_that("all bettr tests pass", {
   print("---------- run_next_job_in_queue halts job but not process on first error")
   added_tasks <- tibble::tibble(
     bettr_task_git_project = c("bettr", "bettr", "bettr"),
-    bettr_task_git_branch = c("feature/task", "feature/task", "feature/task"),
     bettr_task_name = c("task_test_before", "task_test_error_during", "task_test_after"),
     bettr_task_job_comment = c("__TEST__", "__TEST__", "__TEST__"),
     bettr_task_job_priority = c(1, 1, 1)
@@ -228,7 +220,6 @@ testthat::test_that("all bettr tests pass", {
 
   bettr::run_next_job_in_queue(
     project = "bettr",
-    branch = "feature/task",
     stop_on_first_error = TRUE
   )
 
@@ -252,7 +243,6 @@ testthat::test_that("all bettr tests pass", {
 
   added_tasks <- tibble::tibble(
     bettr_task_git_project = c("bettr", "bettr"),
-    bettr_task_git_branch = c("feature/task", "feature/task"),
     bettr_task_name = c("task_test_before", "task_test_update_foo"),
     bettr_task_job_comment = c("__TEST__", "__TEST__"),
     bettr_task_job_priority = c(1, 1)
@@ -294,7 +284,6 @@ testthat::test_that("all bettr tests pass", {
 
   tibble::tibble(
     bettr_task_git_project = "bettr",
-    bettr_task_git_branch = "feature/task",
     bettr_task_name = "task_test_update_foo",
     bettr_task_job_comment = "__TEST__",
     bettr_task_job_priority = 1,
@@ -304,7 +293,6 @@ testthat::test_that("all bettr tests pass", {
 
   tibble::tibble(
     bettr_task_git_project = "bettr",
-    bettr_task_git_branch = "feature/task",
     bettr_task_name = "task_test_before",
     bettr_task_job_comment = "__TEST__",
     bettr_task_job_priority = 1,
@@ -334,7 +322,6 @@ testthat::test_that("all bettr tests pass", {
   tibble::tibble(
 
     bettr_task_git_project = "bettr",
-    bettr_task_git_branch = "feature/task",
     bettr_task_name = "task_test_update_foo",
     bettr_task_job_comment = "__TEST__",
     bettr_task_job_priority = 1,
@@ -344,7 +331,6 @@ testthat::test_that("all bettr tests pass", {
 
   tibble::tibble(
     bettr_task_git_project = "bettr",
-    bettr_task_git_branch = "feature/task",
     bettr_task_name = "task_test_before",
     bettr_task_job_comment = "__TEST__",
     bettr_task_job_priority = 1,
@@ -374,7 +360,6 @@ testthat::test_that("all bettr tests pass", {
 
   added_tasks <- tibble::tibble(
     bettr_task_git_project = c("bettr", "bettr", "bettr"),
-    bettr_task_git_branch = c("feature/task", "feature/task", "feature/task"),
     bettr_task_name = c("task_test_before", "task_test_after", "task_test_delete"),
     bettr_task_job_comment = c("__TEST__", "__TEST__", "__TEST__"),
     bettr_task_job_priority = c(1, 1, 1),
@@ -385,13 +370,11 @@ testthat::test_that("all bettr tests pass", {
 
   # Run the first two tasks immediately; keep the 2nd result for testing
   bettr::run_next_task_in_queue(
-    project = "bettr",
-    branch = "feature/task",
+    project = "bettr"
   )
 
   task_result_1 <- bettr::run_next_task_in_queue(
     project = "bettr",
-    branch = "feature/task",
     return_result = TRUE
   )
 
@@ -403,7 +386,6 @@ testthat::test_that("all bettr tests pass", {
   # Run the next test, which should just be `task_test_after` again
   task_result_2 <- bettr::run_next_task_in_queue(
     project = "bettr",
-    branch = "feature/task",
     return_result = TRUE
   )
 
@@ -415,7 +397,6 @@ testthat::test_that("all bettr tests pass", {
   # Now run the final task in the queue, task_test_delete
   task_result_3 <- bettr::run_next_task_in_queue(
     project = "bettr",
-    branch = "feature/task",
     return_result = TRUE
   )
 
@@ -429,7 +410,6 @@ testthat::test_that("all bettr tests pass", {
   # Nothing should run/task exhaustion.
   task_result_4 <- bettr::run_next_task_in_queue(
     project = "bettr",
-    branch = "feature/task",
     return_result = TRUE
   )
 

@@ -23,10 +23,10 @@ refreshed with data from \code{view_name} and the view \verb{C<VIEW_NAME>} will 
 replaced to point to it.
 }
 \details{
-Note: The view you replicate should not return columns named KEY or
-AUDIT_INSERT_DT, as these are automatically added for auditing purposes
+Note: The view you replicate should not return columns named "key" or
+"audit_insert_dt", as these are automatically added for auditing purposes
 by bettr to all tables.  If you wish to keep these from your source view,
-use SRC_KEY and SRC_AUDIT_INSERT_DT.  If you pass KEY or AUDIT_INSERT_DT
+use SRC_KEY and SRC_AUDIT_INSERT_DT.  If you pass "key" or "audit_insert_dt"
 anyway, this function will rename them to the "SRC_" alternate form
 for you.  Passing both forms (such as KEY and SRC_KEY) will cause an error.
 

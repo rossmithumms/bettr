@@ -22,8 +22,6 @@ property is interpreted.
 \itemize{
 \item bettr_task_git_project: Required.  Name of the git repository
 where the task R file is stored. (e.g., \code{phlebotomy}).
-\item bettr_task_git_branch: Required.  Name of the git branch where
-the source code is stored.
 \item bettr_task_git_commit: Optional.  Hash identifier of the git
 commit matching the task R file.  This is intended for auditing
 and validating only.
